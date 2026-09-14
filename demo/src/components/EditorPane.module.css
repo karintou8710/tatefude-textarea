@@ -1,0 +1,26 @@
+.stage {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.editor {
+  flex: 1;
+  min-height: 460px;
+  /* 縦書きは横スクロール。端から始めたスワイプを履歴の戻るに取られないようにする */
+  overscroll-behavior: contain;
+  /* flex アイテムの高さは auto 扱いなので、子の height: 100% が 0 に潰れる。
+     grid にすると子がグリッド領域まで伸びる */
+  display: grid;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+@media (max-width: 700px) {
+  .editor {
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
+}

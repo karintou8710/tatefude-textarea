@@ -1,0 +1,46 @@
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.controls output {
+  min-width: 4.5em;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.check {
+  gap: 6px;
+}
+
+.focus {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* スマホでは本文だけ出す */
+@media (max-width: 700px) {
+  .controls {
+    display: none;
+  }
+}

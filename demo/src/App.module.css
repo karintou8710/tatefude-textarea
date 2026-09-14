@@ -1,0 +1,20 @@
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  /* アドレスバーの出入りで 100vh が伸び縮みすると縦書きの行長が変わり、全行が組み直る */
+  min-height: 100svh;
+}
+
+/* スマホでは本文だけ。キーボードが出たら、残った領域がそのまま器になる */
+@media (max-width: 700px) {
+  .page {
+    padding: 0;
+    gap: 0;
+    height: var(--app-height, 100svh);
+    min-height: 0;
+  }
+}

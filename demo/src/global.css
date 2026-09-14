@@ -1,0 +1,32 @@
+/* 色と地。どのコンポーネントからも読むので、ここだけは module にしない */
+:root {
+  color-scheme: light dark;
+  --bg: #faf8f4;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #d9d4c9;
+  --panel: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14130f;
+    --fg: #ece7dd;
+    --muted: #9a948a;
+    --line: #35322b;
+    --panel: #1c1a16;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  /* 端末を横にしたとき iOS が本文を勝手に太らせる */
+  -webkit-text-size-adjust: 100%;
+}

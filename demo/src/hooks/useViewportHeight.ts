@@ -12,15 +12,15 @@ export function useViewportHeight(): void {
     if (!viewport) return;
 
     const apply = () => {
-      document.documentElement.style.setProperty("--app-height", `${viewport.height}px`);
+      // ピンチズームでも height は縮む。キーボードのぶんだけ見たいので割り戻す
+      const height = viewport.height * viewport.scale;
+      document.documentElement.style.setProperty("--app-height", `${height}px`);
     };
     apply();
-    // キーボードの出入りは resize、ページごとずれるのは scroll で来る
+    // スクロールでは高さが変わらないので、聞くのは resize だけでいい
     viewport.addEventListener("resize", apply);
-    viewport.addEventListener("scroll", apply);
     return () => {
       viewport.removeEventListener("resize", apply);
-      viewport.removeEventListener("scroll", apply);
       document.documentElement.style.removeProperty("--app-height");
     };
   }, []);
