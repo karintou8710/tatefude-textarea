@@ -1,4 +1,4 @@
-import type { Backend, BackendFactory, CompositionRange, ViewState } from "./backend";
+import type { Backend, BackendFactory, CaretRect, CompositionRange, ViewState } from "./backend";
 import { HiddenInput } from "./input/hidden-input";
 import type { EditKind } from "./model/history";
 import { History } from "./model/history";
@@ -192,6 +192,11 @@ export class VertTextarea {
     return this.backend.lineCount;
   }
 
+  /** キャレットの居場所。container が原点 */
+  get caretRect(): CaretRect {
+    return this.backend.caretRect(this.displayCaret());
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -251,17 +256,21 @@ export class VertTextarea {
     const word = event.altKey;
 
     switch (event.key) {
-      // 縦書きでは行の中は上下、行送りは左右
+      // Blink の textarea に合わせる。縦書きでも「下 = 次の行」「右 = 次の文字」と
+      // 論理の意味を保ち、物理の向きには合わせない
+      case "ArrowUp":
+        event.preventDefault();
+        if (accel) this.moveCaret({ offset: 0, preferEnd: false }, shift);
+        else if (word) this.moveCaret(this.paragraphEdge(-1), shift);
+        else this.moveAcross(-1, shift);
+        return;
       case "ArrowDown":
         event.preventDefault();
-        this.moveCaret(
-          accel
-            ? this.backend.lineEdge(this.caret, "end")
-            : moveInline(this.text, this.caret, 1, word),
-          shift,
-        );
+        if (accel) this.moveCaret({ offset: this.text.length, preferEnd: true }, shift);
+        else if (word) this.moveCaret(this.paragraphEdge(1), shift);
+        else this.moveAcross(1, shift);
         return;
-      case "ArrowUp":
+      case "ArrowLeft":
         event.preventDefault();
         this.moveCaret(
           accel
@@ -270,16 +279,16 @@ export class VertTextarea {
           shift,
         );
         return;
-      case "ArrowLeft":
-        event.preventDefault();
-        if (accel) this.moveCaret({ offset: this.text.length, preferEnd: true }, shift);
-        else this.moveAcross(1, shift);
-        return;
       case "ArrowRight":
         event.preventDefault();
-        if (accel) this.moveCaret({ offset: 0, preferEnd: false }, shift);
-        else this.moveAcross(-1, shift);
+        this.moveCaret(
+          accel
+            ? this.backend.lineEdge(this.caret, "end")
+            : moveInline(this.text, this.caret, 1, word),
+          shift,
+        );
         return;
+      // Blink は縦書きだと何もしないが、使えないままにする理由が無い
       case "Home":
         event.preventDefault();
         this.moveCaret(this.backend.lineEdge(this.caret, "start"), shift);
@@ -291,8 +300,7 @@ export class VertTextarea {
       case "PageDown":
       case "PageUp": {
         event.preventDefault();
-        const step = event.key === "PageDown" ? 1 : -1;
-        const result = this.movePage(step);
+        const result = this.movePage(event.key === "PageDown" ? 1 : -1);
         this.moveCaret(result.caret, shift, result.goal);
         return;
       }
@@ -397,6 +405,19 @@ export class VertTextarea {
     this.moveCaret(result.caret, extend, result.goal);
   }
 
+  /** 段落の頭 / 末へ。すでに端に居るなら隣の段落まで行く */
+  private paragraphEdge(direction: 1 | -1): Caret {
+    const at = this.caret.offset;
+    if (direction === -1) {
+      let start = this.text.lastIndexOf("\n", at - 1) + 1;
+      if (start === at) start = this.text.lastIndexOf("\n", at - 2) + 1;
+      return { offset: Math.max(0, start), preferEnd: false };
+    }
+    let end = this.text.indexOf("\n", at);
+    if (end === at) end = this.text.indexOf("\n", at + 1);
+    return { offset: end === -1 ? this.text.length : end, preferEnd: true };
+  }
+
   private movePage(direction: 1 | -1): { caret: Caret; goal: Goal } {
     let result = { caret: this.caret, goal: this.goal };
     for (let i = 0; i < this.backend.linesPerPage(); i++) {
@@ -429,9 +450,10 @@ export class VertTextarea {
     on("pointerdown", (event) => {
       if (event.button !== 0 || this.options.disabled) return;
       event.preventDefault();
-      this.input.focus();
-
+      // 先に測る。focus するとキャレットを見せるために送りが動き、
+      // 目に見えていた位置とずれる
       const hit = this.backend.hitTest(event.clientX, event.clientY);
+      this.input.focus();
       if (event.detail >= 3) {
         this.selectParagraph(hit.offset);
         return;
@@ -515,7 +537,8 @@ export class VertTextarea {
       text: this.displayText(),
       selection: this.composition ? { start: 0, end: 0 } : { start: from, end: to },
       caret: this.displayCaret(),
-      caretVisible: this.caretOn,
+      // 選択が伸びている間は出さない。textarea もそうなっている
+      caretVisible: this.caretOn && this.anchor === this.caret.offset,
       focused: this.focused,
       composition: this.compositionRange(),
       placeholder:
@@ -533,8 +556,7 @@ export class VertTextarea {
     this.backend.ensureVisible(caret);
 
     // IME の候補ウィンドウをキャレットの隣に出させる
-    const rect = this.backend.caretRect(caret);
-    this.input.moveTo(rect.x - rect.size / 2, rect.y, this.options.font.size);
+    this.input.moveTo(this.backend.caretRect(caret), this.options.writingMode);
   }
 
   private handleFocus(): void {

@@ -7,17 +7,19 @@ export type {
 } from "./backend";
 export { CanvasBackend } from "./canvas/backend";
 export { CanvasVertTextarea } from "./canvas/index";
-export type { CaretGeometry, Geometry, PointHit, Rect } from "./layout/geometry";
+export type { Geometry, PointHit, Rect } from "./layout/geometry";
 export {
   caretGeometry,
   contentBreadth,
   contentLength,
-  lineCenterX,
+  isVertical,
   lineIndexOfOffset,
   offsetAtLineDistance,
   offsetFromPoint,
   offsetInLine,
   selectionRects,
+  toLogical,
+  toPhysical,
   totalBreadth,
 } from "./layout/geometry";
 export type { Layout, LayoutLine, LayoutParams, PlacedChar } from "./layout/layout";

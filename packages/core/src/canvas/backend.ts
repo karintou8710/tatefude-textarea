@@ -48,7 +48,8 @@ export class CanvasBackend implements Backend {
       width: "100%",
       height: "100%",
       display: "block",
-      cursor: "text",
+      // 縦組みの I ビームは横向き。text は横書き用
+      cursor: "vertical-text",
       touchAction: "none",
     } satisfies Partial<CSSStyleDeclaration>);
     container.appendChild(this.surface);
@@ -59,6 +60,7 @@ export class CanvasBackend implements Backend {
     this.measurer = new CanvasMeasurer(ctx, options.font);
     this.renderer = new Renderer(ctx, options);
     this.geometry = {
+      writingMode: options.writingMode,
       width: 0,
       height: 0,
       padding: options.padding,
@@ -78,6 +80,7 @@ export class CanvasBackend implements Backend {
     this.renderer.setOptions(options);
     this.geometry = {
       ...this.geometry,
+      writingMode: options.writingMode,
       padding: options.padding,
       lineHeight: options.font.size * options.font.lineHeight,
       em: options.font.size,
@@ -113,8 +116,7 @@ export class CanvasBackend implements Backend {
   }
 
   caretRect(caret: Caret): CaretRect {
-    const rect = caretGeometry(this.layout, this.geometry, caret.offset, caret.preferEnd);
-    return { x: rect.x, y: rect.y, size: rect.size };
+    return caretGeometry(this.layout, this.geometry, caret.offset, caret.preferEnd);
   }
 
   moveAcross(caret: Caret, direction: 1 | -1, goal: Goal): { caret: Caret; goal: Goal } {
@@ -208,10 +210,17 @@ export class CanvasBackend implements Backend {
       maxLineLength,
       measurer: this.measurer,
       kinsoku,
+      writingMode: this.options.writingMode,
     });
     const placeholder = this.state?.placeholder;
     this.placeholderLayout = placeholder
-      ? layoutText({ text: placeholder, maxLineLength, measurer: this.measurer, kinsoku })
+      ? layoutText({
+          text: placeholder,
+          maxLineLength,
+          measurer: this.measurer,
+          kinsoku,
+          writingMode: this.options.writingMode,
+        })
       : null;
     this.scroll = this.clampScroll(this.scroll);
     this.geometry = { ...this.geometry, scroll: this.scroll };

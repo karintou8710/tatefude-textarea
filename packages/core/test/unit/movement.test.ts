@@ -6,6 +6,7 @@ import { fakeMeasurer } from "../fake-measurer";
 
 const em = 10;
 const geometry: Geometry = {
+  writingMode: "vertical-rl",
   width: 200,
   height: 100,
   padding: { top: 10, right: 10, bottom: 10, left: 10 },

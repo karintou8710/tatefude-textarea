@@ -1,14 +1,16 @@
 import type { Caret, Goal } from "./model/movement";
 import type { ResolvedOptions } from "./types";
 
-/** container を基準にした、キャレットの居場所 */
+/**
+ * container を基準にした、キャレットの居場所。
+ * Range の潰れた矩形と同じで、厚みは持たない。
+ * 縦書きなら width が em で height が 0、横書きなら逆になる。
+ */
 export interface CaretRect {
-  /** 行の中心 */
   x: number;
-  /** 送り方向の位置 */
   y: number;
-  /** キャレットの長さ (行を横切る向き) */
-  size: number;
+  width: number;
+  height: number;
 }
 
 export interface CompositionRange {

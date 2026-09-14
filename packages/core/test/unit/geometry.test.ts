@@ -3,10 +3,11 @@ import {
   caretGeometry,
   contentLength,
   type Geometry,
-  lineCenterX,
   lineIndexOfOffset,
   offsetFromPoint,
   selectionRects,
+  toLogical,
+  toPhysical,
   totalBreadth,
 } from "../../src/layout/geometry";
 import { layoutText } from "../../src/layout/layout";
@@ -16,6 +17,7 @@ const em = 10;
 const measurer = fakeMeasurer(em);
 
 const geometry: Geometry = {
+  writingMode: "vertical-rl",
   width: 200,
   height: 100,
   padding: { top: 10, right: 10, bottom: 10, left: 10 },
@@ -33,13 +35,21 @@ const layout = layoutText({
 });
 
 describe("行の座標", () => {
-  it("1 行目が右端に来る", () => {
-    expect(lineCenterX(geometry, 0)).toBe(181);
-    expect(lineCenterX(geometry, 1)).toBe(163);
+  it("1 行目の右端が器の右端に来る", () => {
+    expect(toPhysical(geometry, 0, 0)).toEqual({ x: 190, y: 10 });
+    expect(toPhysical(geometry, 1, 0)).toEqual({ x: 172, y: 10 });
   });
 
-  it("送った ぶんだけ右へずれる", () => {
-    expect(lineCenterX({ ...geometry, scroll: 18 }, 1)).toBe(181);
+  it("送ったぶんだけ右へずれる", () => {
+    expect(toPhysical({ ...geometry, scroll: 18 }, 1, 0).x).toBe(190);
+  });
+
+  it("行の中の位置は送り方向に進む", () => {
+    expect(toPhysical(geometry, 0, 30)).toEqual({ x: 190, y: 40 });
+  });
+
+  it("物理座標から論理座標へ戻せる", () => {
+    expect(toLogical(geometry, 190, 40)).toEqual({ block: 0, inline: 30 });
   });
 
   it("全部の行を並べるのに要る幅", () => {
@@ -47,15 +57,48 @@ describe("行の座標", () => {
   });
 });
 
+describe("横書き", () => {
+  const horizontal: Geometry = { ...geometry, writingMode: "horizontal-tb" };
+
+  it("軸が入れ替わる", () => {
+    // 行の長さは幅、行送りは高さから取る
+    expect(contentLength(horizontal)).toBe(180);
+    expect(toPhysical(horizontal, 0, 0)).toEqual({ x: 10, y: 10 });
+    expect(toPhysical(horizontal, 1, 30)).toEqual({ x: 40, y: 28 });
+  });
+
+  it("送ると上へずれる", () => {
+    expect(toPhysical({ ...horizontal, scroll: 18 }, 1, 0).y).toBe(10);
+  });
+
+  it("物理座標から論理座標へ戻せる", () => {
+    expect(toLogical(horizontal, 40, 28)).toEqual({ block: 18, inline: 30 });
+  });
+});
+
 describe("キャレットの位置", () => {
+  // 1 行目の中心は 190 - 18/2 = 181。キャレットはそこに em ぶんの厚みで乗る
   it("行の中を下へ進む", () => {
-    expect(caretGeometry(layout, geometry, 0)).toMatchObject({ line: 0, x: 181, y: 10 });
-    expect(caretGeometry(layout, geometry, 3)).toMatchObject({ line: 0, x: 181, y: 40 });
+    expect(caretGeometry(layout, geometry, 0)).toEqual({ x: 176, y: 10, width: 10, height: 0 });
+    expect(caretGeometry(layout, geometry, 3)).toEqual({ x: 176, y: 40, width: 10, height: 0 });
   });
 
   it("折り返しの境目は preferEnd で行が変わる", () => {
-    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ line: 1, x: 163, y: 10 });
-    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ line: 0, x: 181, y: 90 });
+    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ x: 158, y: 10 });
+    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ x: 176, y: 90 });
+  });
+
+  it("横書きでは縦棒になる", () => {
+    const horizontal: Geometry = { ...geometry, writingMode: "horizontal-tb" };
+    const flat = layoutText({
+      text: "あいうえお",
+      maxLineLength: contentLength(horizontal),
+      measurer,
+      kinsoku: false,
+      writingMode: "horizontal-tb",
+    });
+    // 横書きの送りは fakeMeasurer の字幅 (em の半分)。1 行目の中心は 10 + 18/2 = 19
+    expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 14, width: 0, height: 10 });
   });
 
   it("改行のあとは次の行の頭で確定する", () => {
@@ -73,7 +116,12 @@ describe("キャレットの位置", () => {
 describe("座標からキャレットへ", () => {
   it("字の前半なら手前、後半なら次の位置になる", () => {
     expect(offsetFromPoint(layout, geometry, 181, 10 + 21)).toEqual({ offset: 2, line: 0 });
-    expect(offsetFromPoint(layout, geometry, 181, 10 + 25)).toEqual({ offset: 3, line: 0 });
+    expect(offsetFromPoint(layout, geometry, 181, 10 + 26)).toEqual({ offset: 3, line: 0 });
+  });
+
+  it("ちょうど中点は手前に倒す", () => {
+    // ブラウザの当たり判定がそうなっている。dom バックエンドと揃える
+    expect(offsetFromPoint(layout, geometry, 181, 10 + 25)).toEqual({ offset: 2, line: 0 });
   });
 
   it("行の外を突いたら行末に寄せる", () => {

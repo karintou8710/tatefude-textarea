@@ -6,6 +6,7 @@ import {
   orientationOf,
 } from "../text/char-class";
 import { type Grapheme, segmentGraphemes } from "../text/segment";
+import type { WritingMode } from "../types";
 import type { Measurer } from "./measure";
 
 export interface PlacedChar {
@@ -45,12 +46,26 @@ export interface LayoutParams {
   maxLineLength: number;
   measurer: Measurer;
   kinsoku: boolean;
+  /** 既定は縦書き */
+  writingMode?: WritingMode;
 }
 
 /** 禁則で行を戻す上限。これを超えると諦めてそのまま切る */
 const KINSOKU_BACKTRACK_LIMIT = 6;
 
-export function layoutText({ text, maxLineLength, measurer, kinsoku }: LayoutParams): Layout {
+export function layoutText({
+  text,
+  maxLineLength,
+  measurer,
+  kinsoku,
+  writingMode = "vertical-rl",
+}: LayoutParams): Layout {
+  // 横書きでは字を倒す必要が無く、送りは横書きの字幅そのもの
+  const vertical = writingMode === "vertical-rl";
+  const orientationOfChar = (ch: string): Orientation => (vertical ? orientationOf(ch) : "upright");
+  const advanceOf = (ch: string, orientation: Orientation) =>
+    vertical ? measurer.advance(ch, orientation) : measurer.width(ch);
+
   const lines: LayoutLine[] = [];
   const paragraphs = text.split("\n");
   let base = 0;
@@ -59,7 +74,7 @@ export function layoutText({ text, maxLineLength, measurer, kinsoku }: LayoutPar
     const paragraph = paragraphs[p];
     const hardBreak = p < paragraphs.length - 1;
     const graphemes = segmentGraphemes(paragraph, base);
-    const advances = graphemes.map((g) => measurer.advance(g.text, orientationOf(g.text)));
+    const advances = graphemes.map((g) => advanceOf(g.text, orientationOfChar(g.text)));
 
     let cursor = 0;
     if (graphemes.length === 0) {
@@ -90,6 +105,7 @@ export function layoutText({ text, maxLineLength, measurer, kinsoku }: LayoutPar
           cursor,
           end,
           hardBreak && end === graphemes.length,
+          orientationOfChar,
         ),
       );
       cursor = end;
@@ -113,6 +129,7 @@ function buildLine(
   from: number,
   to: number,
   hardBreak: boolean,
+  orientationOfChar: (ch: string) => Orientation,
 ): LayoutLine {
   const chars: PlacedChar[] = [];
   let offset = 0;
@@ -122,7 +139,7 @@ function buildLine(
       text: g.text,
       start: g.start,
       end: g.end,
-      orientation: orientationOf(g.text),
+      orientation: orientationOfChar(g.text),
       offset,
       advance: advances[i],
     });

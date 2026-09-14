@@ -1,16 +1,17 @@
-import type { Padding } from "../types";
+import type { Padding, WritingMode } from "../types";
 import type { Layout, LayoutLine } from "./layout";
 
 export interface Geometry {
+  writingMode: WritingMode;
   /** CSS px */
   width: number;
   height: number;
   padding: Padding;
-  /** 列のピッチ */
+  /** 行のピッチ */
   lineHeight: number;
   /** 全角 1 文字の送り量 */
   em: number;
-  /** 行送り方向 (左) へ送った量。0 なら 1 行目が右端に来る */
+  /** 行送り (block) 方向に送った量 */
   scroll: number;
 }
 
@@ -21,37 +22,61 @@ export interface Rect {
   height: number;
 }
 
-export interface CaretGeometry {
-  line: number;
-  /** 列の中心 */
-  x: number;
-  /** 送り方向の位置 */
-  y: number;
-  /** キャレットの長さ (列を横切る向き) */
-  size: number;
+/**
+ * 字の並ぶ向きを inline、行の重なる向きを block と呼ぶ。
+ * 縦書きは inline が下向き・block が左向き、横書きは inline が右向き・block が下向き。
+ * 座標の話はここに閉じ込めて、レイアウトと移動は軸を知らずに済ませる。
+ */
+export function isVertical(geo: Geometry): boolean {
+  return geo.writingMode === "vertical-rl";
 }
 
-/** 1 行に入れられる長さ */
+/** 1 行に入れられる長さ (inline 方向) */
 export function contentLength(geo: Geometry): number {
-  return Math.max(geo.em, geo.height - geo.padding.top - geo.padding.bottom);
+  const { padding } = geo;
+  const length = isVertical(geo)
+    ? geo.height - padding.top - padding.bottom
+    : geo.width - padding.left - padding.right;
+  return Math.max(geo.em, length);
 }
 
-/** 行送り方向に見えている幅 */
+/** 行送り方向に見えている幅 (block 方向) */
 export function contentBreadth(geo: Geometry): number {
-  return Math.max(0, geo.width - geo.padding.left - geo.padding.right);
+  const { padding } = geo;
+  const breadth = isVertical(geo)
+    ? geo.width - padding.left - padding.right
+    : geo.height - padding.top - padding.bottom;
+  return Math.max(0, breadth);
 }
 
-export function lineCenterX(geo: Geometry, index: number): number {
-  return geo.width - geo.padding.right - geo.lineHeight * (index + 0.5) + geo.scroll;
-}
-
-export function lineStartY(geo: Geometry): number {
-  return geo.padding.top;
-}
-
-/** 全部の行を並べたときに要る幅 */
+/** 全部の行を並べたときに要る長さ (block 方向) */
 export function totalBreadth(layout: Layout, geo: Geometry): number {
   return layout.lines.length * geo.lineHeight;
+}
+
+/** block 方向の、行の頭からの距離 (送りぶんを引いたもの) */
+function blockAt(geo: Geometry, index: number): number {
+  return geo.lineHeight * index - geo.scroll;
+}
+
+/** 論理座標 (行番号, 行の中の位置) → 物理座標 */
+export function toPhysical(geo: Geometry, index: number, inline: number): { x: number; y: number } {
+  const block = blockAt(geo, index);
+  if (isVertical(geo)) {
+    return { x: geo.width - geo.padding.right - block, y: geo.padding.top + inline };
+  }
+  return { x: geo.padding.left + inline, y: geo.padding.top + block };
+}
+
+/** 物理座標 → 論理座標 */
+export function toLogical(geo: Geometry, x: number, y: number): { block: number; inline: number } {
+  if (isVertical(geo)) {
+    return {
+      block: geo.width - geo.padding.right - x + geo.scroll,
+      inline: y - geo.padding.top,
+    };
+  }
+  return { block: y - geo.padding.top + geo.scroll, inline: x - geo.padding.left };
 }
 
 /**
@@ -73,7 +98,7 @@ export function lineIndexOfOffset(layout: Layout, offset: number, preferEnd = fa
   return Math.max(0, lines.length - 1);
 }
 
-/** 行の中での送り方向の位置 (px) */
+/** 行の中での inline 方向の位置 (px) */
 export function offsetInLine(line: LayoutLine, offset: number): number {
   if (offset <= line.start) return 0;
   for (const ch of line.chars) {
@@ -83,21 +108,31 @@ export function offsetInLine(line: LayoutLine, offset: number): number {
   return line.length;
 }
 
+/**
+ * キャレットの矩形。Range の潰れた矩形と同じで、厚みは持たない。
+ * 縦書きなら幅 em の横棒、横書きなら高さ em の縦棒になる場所を指す。
+ */
 export function caretGeometry(
   layout: Layout,
   geo: Geometry,
   offset: number,
   preferEnd = false,
-): CaretGeometry {
+): Rect {
   const index = lineIndexOfOffset(layout, offset, preferEnd);
   const line = layout.lines[index];
-  const y = line ? offsetInLine(line, offset) : 0;
-  return {
-    line: index,
-    x: lineCenterX(geo, index),
-    y: lineStartY(geo) + y,
-    size: geo.em,
-  };
+  const inline = line ? offsetInLine(line, offset) : 0;
+  return lineSpanRect(geo, index, inline, 0);
+}
+
+/** 行の中心に em ぶんの厚みを置いた、inline 方向に length の矩形 */
+function lineSpanRect(geo: Geometry, index: number, inline: number, length: number): Rect {
+  const { x, y } = toPhysical(geo, index, inline);
+  const offset = (geo.lineHeight - geo.em) / 2;
+  if (isVertical(geo)) {
+    // toPhysical は行の block 側の端を返す。縦書きなら列の右端
+    return { x: x - geo.lineHeight + offset, y, width: geo.em, height: length };
+  }
+  return { x, y: y + offset, width: length, height: geo.em };
 }
 
 export function selectionRects(layout: Layout, geo: Geometry, from: number, to: number): Rect[] {
@@ -105,6 +140,7 @@ export function selectionRects(layout: Layout, geo: Geometry, from: number, to: 
   const rects: Rect[] = [];
   /** 改行だけの行も塗られていることが分かるように出す長さ */
   const newlineStub = geo.em * 0.4;
+  const vertical = isVertical(geo);
 
   for (const line of layout.lines) {
     const lineEnd = line.hardBreak ? line.end + 1 : line.end;
@@ -112,16 +148,17 @@ export function selectionRects(layout: Layout, geo: Geometry, from: number, to: 
     const tail = Math.min(to, lineEnd);
     if (head >= tail) continue;
 
-    const y = offsetInLine(line, head);
-    const yEnd = tail > line.end ? line.length + newlineStub : offsetInLine(line, tail);
-    if (yEnd <= y) continue;
+    const inline = offsetInLine(line, head);
+    const inlineEnd = tail > line.end ? line.length + newlineStub : offsetInLine(line, tail);
+    if (inlineEnd <= inline) continue;
 
-    rects.push({
-      x: lineCenterX(geo, line.index) - geo.lineHeight / 2,
-      y: lineStartY(geo) + y,
-      width: geo.lineHeight,
-      height: yEnd - y,
-    });
+    const { x, y } = toPhysical(geo, line.index, inline);
+    const length = inlineEnd - inline;
+    rects.push(
+      vertical
+        ? { x: x - geo.lineHeight, y, width: geo.lineHeight, height: length }
+        : { x, y, width: length, height: geo.lineHeight },
+    );
   }
 
   return rects;
@@ -137,29 +174,19 @@ export interface PointHit {
 export function offsetFromPoint(layout: Layout, geo: Geometry, x: number, y: number): PointHit {
   if (layout.lines.length === 0) return { offset: 0, line: 0 };
 
-  const right = geo.width - geo.padding.right + geo.scroll;
-  const index = clamp(Math.floor((right - x) / geo.lineHeight), 0, layout.lines.length - 1);
+  const { block, inline } = toLogical(geo, x, y);
+  const index = clamp(Math.floor(block / geo.lineHeight), 0, layout.lines.length - 1);
   const line = layout.lines[index];
-
-  const local = y - lineStartY(geo);
-  if (local <= 0) return { offset: line.start, line: index };
-
-  for (const ch of line.chars) {
-    if (local < ch.offset + ch.advance) {
-      // 字の後ろ半分なら次の位置へ
-      const offset = local < ch.offset + ch.advance / 2 ? ch.start : ch.end;
-      return { offset, line: index };
-    }
-  }
-  return { offset: line.end, line: index };
+  return { offset: offsetAtLineDistance(line, inline), line: index };
 }
 
-/** 行の中の送り方向の位置 (px) から、いちばん近いキャレット位置を返す */
+/** 行の中の inline 方向の位置 (px) から、いちばん近いキャレット位置を返す */
 export function offsetAtLineDistance(line: LayoutLine, distance: number): number {
   if (distance <= 0) return line.start;
   for (const ch of line.chars) {
     if (distance < ch.offset + ch.advance) {
-      return distance < ch.offset + ch.advance / 2 ? ch.start : ch.end;
+      // 字の後ろ半分なら次の位置へ。ちょうど中点はブラウザに合わせて手前
+      return distance <= ch.offset + ch.advance / 2 ? ch.start : ch.end;
     }
   }
   return line.end;

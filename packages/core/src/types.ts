@@ -1,5 +1,5 @@
-/** 今は縦書き・行が右から左へ進むものだけ */
-export type WritingMode = "vertical-rl";
+/** 縦書き (行が右から左へ) と、横書き (行が上から下へ) */
+export type WritingMode = "vertical-rl" | "horizontal-tb";
 
 export interface Padding {
   top: number;
@@ -42,6 +42,8 @@ export interface Selection {
 
 export interface VertTextareaOptions {
   value?: string;
+  /** 既定は縦書き */
+  writingMode?: WritingMode;
   placeholder?: string;
   readOnly?: boolean;
   disabled?: boolean;
@@ -66,6 +68,7 @@ export interface VertTextareaOptions {
 }
 
 export interface ResolvedOptions {
+  writingMode: WritingMode;
   placeholder: string;
   readOnly: boolean;
   disabled: boolean;
@@ -98,6 +101,7 @@ export const defaultTheme: Theme = {
 
 export function resolveOptions(options: VertTextareaOptions): ResolvedOptions {
   return {
+    writingMode: options.writingMode ?? "vertical-rl",
     placeholder: options.placeholder ?? "",
     readOnly: options.readOnly ?? false,
     disabled: options.disabled ?? false,

@@ -1,3 +1,4 @@
+import type { WritingMode } from "canvas-vert-textarea";
 import { VertTextarea, type VertTextareaHandle } from "canvas-vert-textarea-react";
 import { useRef, useState } from "react";
 import { sampleText } from "./sample";
@@ -36,11 +37,13 @@ export function App() {
   const [kinsoku, setKinsoku] = useState(true);
   const [smallKanaShift, setSmallKanaShift] = useState(0.08);
   const [linked, setLinked] = useState(true);
+  const [writingMode, setWritingMode] = useState<WritingMode>("vertical-rl");
   const canvasRef = useRef<VertTextareaHandle>(null);
   const domRef = useRef<VertTextareaHandle>(null);
   const dark = usePrefersDark();
 
   const shared = {
+    writingMode,
     kinsoku,
     smallKanaShift,
     font: { family, size, lineHeight },
@@ -54,7 +57,7 @@ export function App() {
       <header>
         <h1>canvas-vert-textarea</h1>
         <p className="lead">
-          同じ API の 2 実装を並べています。左が canvas に自前で組むもの、右がブラウザの
+          同じ API の 2 実装を並べています。左が canvas に字を 1 つずつ置くもの、 右がブラウザの
           writing-mode に組ませて Range API で読み返すもの。
         </p>
       </header>
@@ -82,6 +85,16 @@ export function App() {
             onChange={(e) => setLineHeight(Number(e.target.value))}
           />
           <output>{lineHeight.toFixed(1)}</output>
+        </label>
+        <label>
+          組み方
+          <select
+            value={writingMode}
+            onChange={(e) => setWritingMode(e.target.value as WritingMode)}
+          >
+            <option value="vertical-rl">縦書き</option>
+            <option value="horizontal-tb">横書き</option>
+          </select>
         </label>
         <label>
           書体
@@ -153,7 +166,7 @@ export function App() {
 
       <footer>
         <span>{value.length} 文字</span>
-        <span>↑↓ で行の中を、←→ で行を移る</span>
+        <span>↑↓ で行を移る、←→ で 1 文字ずつ (Blink の textarea と同じ)</span>
       </footer>
     </div>
   );

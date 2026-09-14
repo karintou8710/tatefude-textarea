@@ -1,7 +1,7 @@
 {
   "name": "canvas-vert-textarea",
   "version": "0.0.0",
-  "description": "canvas \u306b\u81ea\u524d\u3067\u7d44\u3080\u7e26\u66f8\u304d\u306e\u30c6\u30ad\u30b9\u30c8\u30a8\u30ea\u30a2",
+  "description": "縦書きも横書きも自前で組むテキストエリア。canvas と DOM の 2 実装",
   "license": "MIT",
   "type": "module",
   "files": [

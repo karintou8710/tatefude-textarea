@@ -1,6 +1,9 @@
 # canvas-vert-textarea
 
-**縦書きのテキストエリア。組み方の違う 2 実装を、同じ API で持っている。**
+**組版を自前で持つテキストエリア。縦書きと横書き、canvas と DOM を同じ API で扱う。**
+
+[tatefude](https://github.com/karintou8710/tatefude) は縦書きの WYSIWYG (リッチテキスト)。
+こちらはその平文版で、実装は共有していない。
 
 `contenteditable` は使わない。入力は画面に出さない `<textarea>` が受け、
 テキスト・選択・履歴・IME はこちらが持つ。**違うのは「どう組んで、どう描くか」だけ。**
@@ -8,10 +11,19 @@
 | バックエンド | 組み方 | import |
 | --- | --- | --- |
 | `canvas` | 字を 1 つずつ canvas に置く。行分割・禁則・字の向きを自前で持つ | `canvas-vert-textarea` |
-| `dom` | `writing-mode: vertical-rl` に組ませて、落ちた位置を Range API で読み返す | `canvas-vert-textarea/dom` |
+| `dom` | ブラウザの `writing-mode` に組ませて、落ちた位置を Range API で読み返す | `canvas-vert-textarea/dom` |
 
 同じ振る舞いであることは、[ブラウザテスト](packages/core/test/browser/editor.test.ts)を
-両方に通して縛っている。
+**2 実装 × 縦横 × 2 エンジン (Chromium / WebKit)** に通して縛っている。
+
+```ts
+new CanvasVertTextarea(host, { writingMode: "vertical-rl" });   // 既定
+new DomVertTextarea(host, { writingMode: "horizontal-tb" });
+```
+
+座標は inline (字の並ぶ向き) と block (行の重なる向き) で持っていて、
+物理の x/y に直すのは描く直前だけ。キー操作も論理なので、
+組み方を変えても同じコードが動く。
 
 ## どちらを使うか
 
@@ -112,41 +124,42 @@ UAX #50 (Unicode Vertical Text Layout) の分類を、canvas で再現できる 
 
 ## キー操作
 
-行の中が上下、行送りが左右になる。
+**Blink の `<textarea>` に合わせてある。** 縦書きでも「下 = 次の行」「右 = 次の文字」と
+論理の意味を保ち、物理の向きには合わせない。
+実際に縦書きの textarea を隣に置いて同じキーを打ち、offset を突き合わせている
+([native.test.ts](packages/core/test/browser/native.test.ts))。
 
 | キー | 動き |
 | --- | --- |
-| `↑` `↓` | 行の中を戻る / 進む |
-| `←` `→` | 次の行 / 前の行へ |
-| `Option` + `↑` `↓` | 単語ぶん動く |
-| `⌘` + `↑` `↓` | 行頭 / 行末へ |
-| `⌘` + `→` `←` | 文頭 / 文末へ |
+| `↑` `↓` | 前の行 / 次の行へ (縦書きなので右 / 左へ動く) |
+| `←` `→` | 1 文字戻る / 進む (縦書きなので上 / 下へ動く) |
+| `⌥` + `↑` `↓` | 段落の頭 / 末へ |
+| `⌥` + `←` `→` | 単語ぶん動く |
+| `⌘` + `↑` `↓` | 文頭 / 文末へ |
+| `⌘` + `←` `→` | 行頭 / 行末へ |
+| `Home` `End` | 行頭 / 行末へ |
 | `Shift` + 上記 | 選択を伸ばす |
 | `⌘A` / `⌘Z` / `⇧⌘Z` | 全選択 / 取り消し / やり直し |
 | ダブルクリック / トリプルクリック | 単語 / 段落を選ぶ |
 
 ホイールと横スワイプで行送り方向に送る (縦書きなので、下に回すと左へ読み進む)。
 
-## dom バックエンドで踏んだところ
+### わざと合わせていないもの
 
-`writing-mode` に組ませると、縦書きの中身は**直交フロー**になる。
-ここで Chrome の挙動に 2 つ穴がある (どちらも実装で回避済み)。
-
-- 子の高さが `100%` だと、幅を決める段階で高さが未定になり、
-  `width: auto` の shrink-to-fit も `max-content` も桁違いの値を返す。**行の長さは px で入れる**
-- 中身を書き換えても、直交フローの intrinsic が**計算し直されない**。
-  外側の幅は測って px で入れる
-
-選択の矩形も自前で描く (`user-select: none` にして Range から矩形を取る)。
-絶対配置は DOM 順に関わらず通常フローの上に来るので、重なりは `z-index` で決めている。
+- `Home` / `End` / `PageUp` / `PageDown` … Blink は縦書きだと**何もしない**。
+  使えないままにする理由が無いので、行頭 / 行末と 1 画面ぶんの行移動に割り当てている
+- `⌥` + 左右 (単語) … Blink は CJK を 1 文字ずつ刻む。`Intl.Segmenter` の方が日本語に合う
 
 ## できないこと
 
+- **canvas バックエンドは字を 1 つずつ測って置く**ので、フォントのカーニングや
+  約物の詰め (`palt` / `chws`) が効かない。ラテンの綴りや連続する約物の詰まり方が
+  dom バックエンドと少しずれる
 - ルビ・縦中横・傍点は持たない。**平文の textarea であって RTE ではない**
-  (縦書きの WYSIWYG が要るなら [tatefude](https://github.com/karintou8710/tatefude))
+  (要るなら [tatefude](https://github.com/karintou8710/tatefude))
 - スクロールバーは出ない。送りはホイールと `scrollOffset` から
 - 行の詰め (追い込み・字間調整) はしない
-- `writing-mode` は `vertical-rl` のみ
+- `writing-mode` は `vertical-rl` と `horizontal-tb` だけ。縦書き左→右や RTL には対応しない
 
 ## 開発
 

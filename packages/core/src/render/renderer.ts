@@ -1,8 +1,9 @@
 import type { CompositionRange } from "../backend";
-import type { Geometry } from "../layout/geometry";
-import { caretGeometry, lineCenterX, lineStartY, selectionRects } from "../layout/geometry";
+import type { Geometry, Rect } from "../layout/geometry";
+import { caretGeometry, isVertical, selectionRects, toPhysical } from "../layout/geometry";
 import type { Layout, PlacedChar } from "../layout/layout";
 import { cssFont } from "../layout/measure";
+import type { Caret } from "../model/movement";
 import { isSmallKana } from "../text/char-class";
 import type { ResolvedOptions } from "../types";
 
@@ -10,7 +11,7 @@ export interface RenderState {
   layout: Layout;
   geometry: Geometry;
   selection: { start: number; end: number };
-  caret: { offset: number; preferEnd: boolean } | null;
+  caret: Caret | null;
   focused: boolean;
   composition: CompositionRange | null;
   /** 本文が空のときに薄く出す。無ければ null */
@@ -39,17 +40,14 @@ export class Renderer {
     }
 
     ctx.font = cssFont(this.options.font);
-    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     this.drawSelection(state);
-
-    if (state.placeholder) {
-      this.drawLines(state.placeholder, geometry, this.options.theme.placeholder);
-    } else {
-      this.drawLines(layout, geometry, this.options.theme.text);
-    }
-
+    this.drawLines(
+      state.placeholder ?? layout,
+      geometry,
+      state.placeholder ? this.options.theme.placeholder : this.options.theme.text,
+    );
     if (state.composition) this.drawComposition(state);
     if (state.caret && state.focused) this.drawCaret(state);
   }
@@ -57,55 +55,66 @@ export class Renderer {
   private drawSelection(state: RenderState): void {
     const { start, end } = state.selection;
     if (start === end) return;
-    const rects = selectionRects(state.layout, state.geometry, start, end);
     this.ctx.fillStyle = state.focused
       ? this.options.theme.selection
       : this.options.theme.selectionInactive;
-    for (const rect of rects) {
+    for (const rect of selectionRects(state.layout, state.geometry, start, end)) {
       this.ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
   }
 
   private drawLines(layout: Layout, geometry: Geometry, color: string): void {
     this.ctx.fillStyle = color;
-    const top = lineStartY(geometry);
-    const left = -geometry.lineHeight;
-    const right = geometry.width + geometry.lineHeight;
+    const vertical = isVertical(geometry);
+    const limit = vertical ? geometry.width : geometry.height;
 
     for (const line of layout.lines) {
-      const cx = lineCenterX(geometry, line.index);
+      const head = toPhysical(geometry, line.index, 0);
       // 画面の外に出た行は描かない
-      if (cx < left || cx > right) continue;
+      const block = vertical ? head.x : head.y;
+      if (block < -geometry.lineHeight || block > limit + geometry.lineHeight) continue;
+
       for (const ch of line.chars) {
-        this.drawChar(ch, cx, top + ch.offset);
+        const at = toPhysical(geometry, line.index, ch.offset);
+        if (vertical) this.drawUpright(ch, at.x - geometry.lineHeight / 2, at.y);
+        else this.drawFlat(ch, at.x, at.y + geometry.lineHeight / 2);
       }
     }
   }
 
-  private drawChar(ch: PlacedChar, cx: number, top: number): void {
+  /** 横書き。字を倒す必要も寄せる必要も無い */
+  private drawFlat(ch: PlacedChar, x: number, middle: number): void {
+    this.ctx.textAlign = "left";
+    this.ctx.fillText(ch.text, x, middle);
+  }
+
+  /** 縦書き。UAX #50 の分類ごとに置き方を変える */
+  private drawUpright(ch: PlacedChar, center: number, top: number): void {
     const { ctx } = this;
     const size = this.options.font.size;
 
     switch (ch.orientation) {
       case "upright": {
-        let x = cx;
+        let x = center;
         let y = top + ch.advance / 2;
         if (this.options.smallKanaShift > 0 && isSmallKana(ch.text)) {
           const shift = size * this.options.smallKanaShift;
           x += shift;
           y -= shift;
         }
+        ctx.textAlign = "center";
         ctx.fillText(ch.text, x, y);
         break;
       }
       case "corner": {
         // 横書きでは字面が em ボックスの左下にある。縦書きの定位置は右上
-        ctx.fillText(ch.text, cx + size / 2, top + ch.advance / 2 - size / 2);
+        ctx.textAlign = "center";
+        ctx.fillText(ch.text, center + size / 2, top + ch.advance / 2 - size / 2);
         break;
       }
       case "rotate": {
         ctx.save();
-        ctx.translate(cx, top);
+        ctx.translate(center, top);
         ctx.rotate(Math.PI / 2);
         // 回した先では +x が送り方向 (下)、textBaseline middle が列の中心に乗る
         ctx.textAlign = "left";
@@ -121,14 +130,16 @@ export class Renderer {
     if (!composition) return;
     const { geometry, layout } = state;
     const { ctx } = this;
+    const vertical = isVertical(geometry);
 
     const draw = (from: number, to: number, color: string, thickness: number) => {
       if (from >= to) return;
       ctx.fillStyle = color;
       for (const rect of selectionRects(layout, geometry, from, to)) {
-        // 縦書きの下線は行の左側 (block-end 側) に引く
-        const x = rect.x + (geometry.lineHeight - geometry.em) / 2 - thickness;
-        ctx.fillRect(x, rect.y, thickness, rect.height);
+        // 下線は行の block-end 側。縦書きなら左、横書きなら下
+        const gap = (geometry.lineHeight - geometry.em) / 2;
+        if (vertical) ctx.fillRect(rect.x + gap - thickness, rect.y, thickness, rect.height);
+        else ctx.fillRect(rect.x, rect.y + rect.height - gap, rect.width, thickness);
       }
     };
 
@@ -140,10 +151,14 @@ export class Renderer {
     const caret = state.caret;
     if (!caret) return;
     const { geometry, layout } = state;
-    const rect = caretGeometry(layout, geometry, caret.offset, caret.preferEnd);
+    const rect: Rect = caretGeometry(layout, geometry, caret.offset, caret.preferEnd);
     const thickness = Math.max(1, Math.round(geometry.em / 14));
 
     this.ctx.fillStyle = this.options.theme.caret;
-    this.ctx.fillRect(rect.x - rect.size / 2, rect.y - thickness / 2, rect.size, thickness);
+    if (isVertical(geometry)) {
+      this.ctx.fillRect(rect.x, rect.y - thickness / 2, rect.width, thickness);
+    } else {
+      this.ctx.fillRect(rect.x - thickness / 2, rect.y, thickness, rect.height);
+    }
   }
 }

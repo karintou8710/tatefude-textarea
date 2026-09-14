@@ -1,3 +1,5 @@
+import type { WritingMode } from "../types";
+
 export interface HiddenInputHandlers {
   insert(text: string): void;
   compositionStart(): void;
@@ -44,6 +46,12 @@ export class HiddenInput {
       outline: "none",
       resize: "none",
       overflow: "hidden",
+      // 変換中の文字と候補ウィンドウを縦に出させる
+      writingMode: "vertical-rl",
+      // 行間があると変換中の文字が行の中で寄る。moveTo の計算を単純に保つ
+      lineHeight: "1",
+      // 1px でも下の面と同じ形にしておく
+      cursor: "vertical-text",
       // display:none や visibility:hidden にすると IME が動かない
       opacity: "0",
       background: "transparent",
@@ -133,12 +141,22 @@ export class HiddenInput {
     return this.composing;
   }
 
-  /** IME の候補ウィンドウをキャレットの脇に出させる */
-  moveTo(x: number, y: number, size: number): void {
+  /**
+   * IME の候補ウィンドウをキャレットの脇に出させる。
+   * 縦組みの中身は右端から左へ伸びるので、要素の右端を行の右端に合わせると
+   * 変換中の文字がちょうどキャレットの行に乗る (line-height: 1 が前提)。
+   *
+   * @param rect キャレットの矩形。container 基準で、厚みは持たない
+   * @param mode 変換中の文字と候補ウィンドウをどちら向きに出すか
+   */
+  moveTo(rect: { x: number; y: number; width: number; height: number }, mode: WritingMode): void {
     const style = this.element.style;
-    style.left = `${Math.round(x)}px`;
-    style.top = `${Math.round(y)}px`;
-    style.fontSize = `${size}px`;
+    const vertical = mode === "vertical-rl";
+    style.writingMode = mode;
+    style.cursor = vertical ? "vertical-text" : "text";
+    style.left = `${Math.round(vertical ? rect.x + rect.width : rect.x) - (vertical ? 1 : 0)}px`;
+    style.top = `${Math.round(rect.y)}px`;
+    style.fontSize = `${Math.round(vertical ? rect.width : rect.height)}px`;
   }
 
   setReadOnly(readOnly: boolean): void {

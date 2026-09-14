@@ -19,8 +19,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **両バックエンドは同じ振る舞いをする。**片方だけ直したら、もう片方も見る。
 
+**キー操作は Blink の `<textarea>` を基準にする。**縦書きでも「下 = 次の行」「右 = 次の文字」。
+迷ったら `test/browser/native.test.ts` に本物の textarea を並べて測る。
+
 ## テスト
 
 - レイアウト・禁則・移動の判定は `test/unit` に node のテストとして書く。計測器は `test/fake-measurer.ts` を使う。
-- 入力・IME・キャレットは `test/browser` に chromium のテストとして書く。
-  ここは `describe.each` で両バックエンドを回しているので、追加したテストは自動的に両方にかかる。
+- 入力・IME・キャレットは `test/browser` に書く。chromium と webkit の両方で回る。
+  - `editor.test.ts` … `describe.each` で両バックエンドを回す。追加すれば自動的に両方にかかる
+  - `parity.test.ts` … 2 つのバックエンドが同じところに着くことを縛る
+  - `native.test.ts` … Blink の `<textarea>` と突き合わせる。`userEvent` で本物のキーを打つ
