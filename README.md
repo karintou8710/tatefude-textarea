@@ -1,21 +1,33 @@
 # canvas-vert-textarea
 
-**canvas に自前で組む縦書きのテキストエリア。**
+**縦書きのテキストエリア。組み方の違う 2 実装を、同じ API で持っている。**
 
-`writing-mode: vertical-rl` を当てた DOM ではなく、字の 1 つずつを canvas に置いて縦組みを作る。
-入力は画面に出さない `<textarea>` が受けるので、IME もクリップボードもブラウザの仕組みに乗る。
+`contenteditable` は使わない。入力は画面に出さない `<textarea>` が受け、
+テキスト・選択・履歴・IME はこちらが持つ。**違うのは「どう組んで、どう描くか」だけ。**
 
-- `canvas-vert-textarea` … 素の DOM で使うコア
-- `canvas-vert-textarea-react` … React アダプタ
+| バックエンド | 組み方 | import |
+| --- | --- | --- |
+| `canvas` | 字を 1 つずつ canvas に置く。行分割・禁則・字の向きを自前で持つ | `canvas-vert-textarea` |
+| `dom` | `writing-mode: vertical-rl` に組ませて、落ちた位置を Range API で読み返す | `canvas-vert-textarea/dom` |
 
-## なぜ canvas か
+同じ振る舞いであることは、[ブラウザテスト](packages/core/test/browser/editor.test.ts)を
+両方に通して縛っている。
 
-DOM の `writing-mode: vertical-rl` は、**どこで折り返したか・どの字がどこに落ちたかをこちらから見られない**。
-禁則の効き方も字の向きもブラウザ任せで、縦中横やルビを足そうとした途端に手が出せなくなる。
+## どちらを使うか
 
-canvas なら行分割から字の置き場所まで全部こちらが持つ。
-代わりに、DOM が無料でくれていたもの — キャレット・選択・IME・スクロール — を自分で書くことになる。
-このライブラリはその引き受けたぶんを実装している。
+**まず `dom` を試すことを勧める。**
+
+縦組みでいちばん間違えやすいところ — 字の向き (UAX #50)・フォントの縦組み字形 (`vert`)・
+禁則 — がブラウザ側で解決される。`canvas` 側はこれを自前のテーブルで近似していて、
+実測したところ**半角カタカナ (U+FF66–FF9D) と ± § などを取り違えていた**。
+規格を自分で持つのは、地味に間違え続ける仕事になる。
+
+`canvas` を選ぶ理由はこのあたり。
+
+- 原稿用紙のマス目、字ごとの装飾など**レイアウト結果そのものが要る**
+- canvas / WebGL アプリの中に埋める
+- 印刷・画像出力でブラウザ差を消したい
+- 禁則を自前で制御したい (`dom` は `line-break` の strict / loose しか選べない)
 
 ## 使う
 
@@ -25,6 +37,8 @@ pnpm add canvas-vert-textarea
 
 ```ts
 import { CanvasVertTextarea } from "canvas-vert-textarea";
+// あるいは
+// import { DomVertTextarea } from "canvas-vert-textarea/dom";
 
 const editor = new CanvasVertTextarea(document.getElementById("editor")!, {
   value: "吾輩は猫である。名前はまだ無い。",
@@ -47,13 +61,13 @@ pnpm add canvas-vert-textarea canvas-vert-textarea-react
 ```
 
 ```tsx
-import { CanvasVertTextarea } from "canvas-vert-textarea-react";
+import { VertTextarea } from "canvas-vert-textarea-react";
 
 function Editor() {
   const [value, setValue] = useState("");
   return (
     <div style={{ display: "grid", height: 480 }}>
-      <CanvasVertTextarea value={value} onChange={setValue} padding={24} />
+      <VertTextarea backend="dom" value={value} onChange={setValue} padding={24} />
     </div>
   );
 }
@@ -61,7 +75,9 @@ function Editor() {
 
 `value` を渡すと controlled、渡さなければ `defaultValue` から始まる uncontrolled になる。
 
-## 縦書きの組み方
+## canvas バックエンドの組み方
+
+`dom` バックエンドではここを全部ブラウザに任せるので、以下は `canvas` の話。
 
 ### 字の向き
 
@@ -111,6 +127,19 @@ UAX #50 (Unicode Vertical Text Layout) の分類を、canvas で再現できる 
 
 ホイールと横スワイプで行送り方向に送る (縦書きなので、下に回すと左へ読み進む)。
 
+## dom バックエンドで踏んだところ
+
+`writing-mode` に組ませると、縦書きの中身は**直交フロー**になる。
+ここで Chrome の挙動に 2 つ穴がある (どちらも実装で回避済み)。
+
+- 子の高さが `100%` だと、幅を決める段階で高さが未定になり、
+  `width: auto` の shrink-to-fit も `max-content` も桁違いの値を返す。**行の長さは px で入れる**
+- 中身を書き換えても、直交フローの intrinsic が**計算し直されない**。
+  外側の幅は測って px で入れる
+
+選択の矩形も自前で描く (`user-select: none` にして Range から矩形を取る)。
+絶対配置は DOM 順に関わらず通常フローの上に来るので、重なりは `z-index` で決めている。
+
 ## できないこと
 
 - ルビ・縦中横・傍点は持たない。**平文の textarea であって RTE ではない**
@@ -123,7 +152,7 @@ UAX #50 (Unicode Vertical Text Layout) の分類を、canvas で再現できる 
 
 ```sh
 pnpm install
-pnpm dev          # demo を立てる
+pnpm dev          # demo を立てる (2 実装が並ぶ)
 pnpm typecheck
 pnpm lint
 pnpm test         # レイアウトの単体テスト (node)

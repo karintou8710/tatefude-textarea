@@ -1,17 +1,35 @@
 import {
-  type CanvasVertTextareaOptions,
-  CanvasVertTextarea as CoreEditor,
+  CanvasVertTextarea,
+  type VertTextarea as CoreEditor,
   type Selection,
+  type VertTextareaOptions,
 } from "canvas-vert-textarea";
+import { DomVertTextarea } from "canvas-vert-textarea/dom";
 import { type CSSProperties, forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
-/** core の描画設定のうち、DOM 側の関心ごとを除いたもの */
+/** 組み方と描き方の実装。差し替えても公開 API は変わらない */
+export type Backend = "canvas" | "dom";
+
+const backends: Record<
+  Backend,
+  new (
+    host: HTMLElement,
+    options: VertTextareaOptions,
+  ) => CoreEditor
+> = {
+  canvas: CanvasVertTextarea,
+  dom: DomVertTextarea,
+};
+
+/** core の設定のうち、DOM 側の関心ごとを除いたもの */
 type StyleOptions = Omit<
-  CanvasVertTextareaOptions,
+  VertTextareaOptions,
   "value" | "onChange" | "onSelectionChange" | "onFocus" | "onBlur"
 >;
 
-export interface CanvasVertTextareaProps extends StyleOptions {
+export interface VertTextareaProps extends StyleOptions {
+  /** 既定は canvas。切り替えるとエディタを作り直す */
+  backend?: Backend;
   /** 渡すと controlled になる */
   value?: string;
   defaultValue?: string;
@@ -23,7 +41,7 @@ export interface CanvasVertTextareaProps extends StyleOptions {
   onBlur?: () => void;
 }
 
-export interface CanvasVertTextareaHandle {
+export interface VertTextareaHandle {
   focus(): void;
   blur(): void;
   insertText(text: string): void;
@@ -37,9 +55,9 @@ export interface CanvasVertTextareaHandle {
 
 const fillStyle: CSSProperties = { width: "100%", height: "100%" };
 
-export const CanvasVertTextarea = forwardRef<CanvasVertTextareaHandle, CanvasVertTextareaProps>(
-  function CanvasVertTextarea(props, ref) {
-    const { value, defaultValue, className, style, ...options } = props;
+export const VertTextarea = forwardRef<VertTextareaHandle, VertTextareaProps>(
+  function VertTextarea(props, ref) {
+    const { value, defaultValue, className, style, backend = "canvas", ...options } = props;
 
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<CoreEditor | null>(null);
@@ -55,7 +73,8 @@ export const CanvasVertTextarea = forwardRef<CanvasVertTextareaHandle, CanvasVer
       if (!container) return;
 
       const { value: initial, defaultValue: fallback, ...rest } = propsRef.current;
-      const editor = new CoreEditor(container, {
+      const Editor = backends[backend];
+      const editor = new Editor(container, {
         ...omitDomProps(rest),
         value: initial ?? fallback ?? "",
         onChange: (next) => propsRef.current.onChange?.(next),
@@ -69,7 +88,7 @@ export const CanvasVertTextarea = forwardRef<CanvasVertTextareaHandle, CanvasVer
         editor.destroy();
         editorRef.current = null;
       };
-    }, []);
+    }, [backend]);
 
     useEffect(() => {
       const editor = editorRef.current;
@@ -104,7 +123,7 @@ export const CanvasVertTextarea = forwardRef<CanvasVertTextareaHandle, CanvasVer
 );
 
 function omitDomProps(props: Record<string, unknown>): StyleOptions {
-  const { className: _c, style: _s, ...rest } = props;
+  const { className: _c, style: _s, backend: _b, ...rest } = props;
   return rest as StyleOptions;
 }
 

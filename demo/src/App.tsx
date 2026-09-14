@@ -1,4 +1,4 @@
-import { CanvasVertTextarea, type CanvasVertTextareaHandle } from "canvas-vert-textarea-react";
+import { VertTextarea, type VertTextareaHandle } from "canvas-vert-textarea-react";
 import { useRef, useState } from "react";
 import { sampleText } from "./sample";
 import { usePrefersDark } from "./useColorScheme";
@@ -35,14 +35,28 @@ export function App() {
   const [family, setFamily] = useState(fonts[0].value);
   const [kinsoku, setKinsoku] = useState(true);
   const [smallKanaShift, setSmallKanaShift] = useState(0.08);
-  const handle = useRef<CanvasVertTextareaHandle>(null);
+  const [linked, setLinked] = useState(true);
+  const canvasRef = useRef<VertTextareaHandle>(null);
+  const domRef = useRef<VertTextareaHandle>(null);
   const dark = usePrefersDark();
+
+  const shared = {
+    kinsoku,
+    smallKanaShift,
+    font: { family, size, lineHeight },
+    padding: 24,
+    theme: dark ? darkTheme : lightTheme,
+    placeholder: "ここに書く",
+  };
 
   return (
     <div className="page">
       <header>
         <h1>canvas-vert-textarea</h1>
-        <p className="lead">canvas に自前で組む縦書きのテキストエリア</p>
+        <p className="lead">
+          同じ API の 2 実装を並べています。左が canvas に自前で組むもの、右がブラウザの
+          writing-mode に組ませて Range API で読み返すもの。
+        </p>
       </header>
 
       <div className="controls">
@@ -95,23 +109,46 @@ export function App() {
           <input type="checkbox" checked={kinsoku} onChange={(e) => setKinsoku(e.target.checked)} />
           禁則処理
         </label>
-        <button type="button" onClick={() => handle.current?.focus()}>
-          フォーカス
-        </button>
+        <label className="check">
+          <input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} />
+          本文を連動させる
+        </label>
       </div>
 
-      <div className="editor">
-        <CanvasVertTextarea
-          ref={handle}
-          value={value}
-          onChange={setValue}
-          placeholder="ここに書く"
-          kinsoku={kinsoku}
-          smallKanaShift={smallKanaShift}
-          font={{ family, size, lineHeight }}
-          padding={24}
-          theme={dark ? darkTheme : lightTheme}
-        />
+      <div className="pair">
+        <section>
+          <h2>
+            canvas <span>字を 1 つずつ置く</span>
+            <button type="button" onClick={() => canvasRef.current?.focus()}>
+              フォーカス
+            </button>
+          </h2>
+          <div className="editor">
+            <VertTextarea
+              ref={canvasRef}
+              backend="canvas"
+              {...shared}
+              {...(linked ? { value, onChange: setValue } : { defaultValue: value })}
+            />
+          </div>
+        </section>
+
+        <section>
+          <h2>
+            dom <span>writing-mode に組ませる</span>
+            <button type="button" onClick={() => domRef.current?.focus()}>
+              フォーカス
+            </button>
+          </h2>
+          <div className="editor">
+            <VertTextarea
+              ref={domRef}
+              backend="dom"
+              {...shared}
+              {...(linked ? { value, onChange: setValue } : { defaultValue: value })}
+            />
+          </div>
+        </section>
       </div>
 
       <footer>

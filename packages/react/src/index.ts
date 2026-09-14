@@ -1,3 +1,3 @@
-export type { CanvasVertTextareaOptions, FontStyle, Selection, Theme } from "canvas-vert-textarea";
-export type { CanvasVertTextareaHandle, CanvasVertTextareaProps } from "./CanvasVertTextarea";
-export { CanvasVertTextarea } from "./CanvasVertTextarea";
+export type { FontStyle, Selection, Theme, VertTextareaOptions } from "canvas-vert-textarea";
+export type { Backend, VertTextareaHandle, VertTextareaProps } from "./VertTextarea";
+export { VertTextarea } from "./VertTextarea";

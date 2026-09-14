@@ -1,17 +1,10 @@
+import type { CompositionRange } from "../backend";
 import type { Geometry } from "../layout/geometry";
 import { caretGeometry, lineCenterX, lineStartY, selectionRects } from "../layout/geometry";
 import type { Layout, PlacedChar } from "../layout/layout";
 import { cssFont } from "../layout/measure";
 import { isSmallKana } from "../text/char-class";
 import type { ResolvedOptions } from "../types";
-
-export interface CompositionRange {
-  start: number;
-  end: number;
-  /** IME がいま対象にしている文節。無ければ start と同じ */
-  activeStart: number;
-  activeEnd: number;
-}
 
 export interface RenderState {
   layout: Layout;

@@ -40,7 +40,7 @@ export interface Selection {
   focus: number;
 }
 
-export interface CanvasVertTextareaOptions {
+export interface VertTextareaOptions {
   value?: string;
   placeholder?: string;
   readOnly?: boolean;
@@ -96,7 +96,7 @@ export const defaultTheme: Theme = {
   compositionActive: "#2563eb",
 };
 
-export function resolveOptions(options: CanvasVertTextareaOptions): ResolvedOptions {
+export function resolveOptions(options: VertTextareaOptions): ResolvedOptions {
   return {
     placeholder: options.placeholder ?? "",
     readOnly: options.readOnly ?? false,
@@ -111,7 +111,7 @@ export function resolveOptions(options: CanvasVertTextareaOptions): ResolvedOpti
   };
 }
 
-function resolvePadding(padding: CanvasVertTextareaOptions["padding"]): Padding {
+function resolvePadding(padding: VertTextareaOptions["padding"]): Padding {
   if (typeof padding === "number") {
     return { top: padding, right: padding, bottom: padding, left: padding };
   }

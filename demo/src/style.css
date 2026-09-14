@@ -29,7 +29,7 @@ body {
 }
 
 .page {
-  max-width: 1100px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 32px 24px 48px;
   display: flex;
@@ -79,26 +79,62 @@ h1 {
   gap: 6px;
 }
 
-.controls button {
+.pair {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+}
+
+.pair section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.pair h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pair h2 span {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.pair h2 button {
   margin-left: auto;
-  padding: 6px 14px;
+  padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
   color: var(--fg);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .editor {
   flex: 1;
-  min-height: 480px;
+  min-height: 460px;
   /* flex アイテムの高さは auto 扱いなので、子の height: 100% が 0 に潰れる。
      grid にすると子がグリッド領域まで伸びる */
   display: grid;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+  .pair {
+    grid-template-columns: 1fr;
+  }
 }
 
 footer {

@@ -1,5 +1,12 @@
-export type { SetValueOptions } from "./editor";
-export { CanvasVertTextarea } from "./editor";
+export type {
+  Backend,
+  BackendFactory,
+  CaretRect,
+  CompositionRange,
+  ViewState,
+} from "./backend";
+export { CanvasBackend } from "./canvas/backend";
+export { CanvasVertTextarea } from "./canvas/index";
 export type { CaretGeometry, Geometry, PointHit, Rect } from "./layout/geometry";
 export {
   caretGeometry,
@@ -13,14 +20,12 @@ export {
   selectionRects,
   totalBreadth,
 } from "./layout/geometry";
-
 export type { Layout, LayoutLine, LayoutParams, PlacedChar } from "./layout/layout";
 export { layoutText } from "./layout/layout";
 export type { Measurer } from "./layout/measure";
 export { CanvasMeasurer, cssFont } from "./layout/measure";
 export type { Caret, Goal } from "./model/movement";
 export { moveAcrossLines, moveInline, movePage, moveToLineEdge } from "./model/movement";
-
 export type { Orientation } from "./text/char-class";
 export {
   isLatinWordChar,
@@ -32,12 +37,14 @@ export {
 export type { Grapheme } from "./text/segment";
 export { segmentGraphemes, stepGrapheme, stepWord } from "./text/segment";
 export type {
-  CanvasVertTextareaOptions,
   FontStyle,
   Padding,
   ResolvedOptions,
   Selection,
   Theme,
+  VertTextareaOptions,
   WritingMode,
 } from "./types";
 export { defaultFont, defaultTheme, resolveOptions } from "./types";
+export type { SetValueOptions } from "./vert-textarea";
+export { VertTextarea } from "./vert-textarea";

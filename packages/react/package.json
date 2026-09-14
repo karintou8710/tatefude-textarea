@@ -1,7 +1,7 @@
 {
   "name": "canvas-vert-textarea-react",
   "version": "0.0.0",
-  "description": "canvas-vert-textarea の React アダプタ",
+  "description": "canvas-vert-textarea \u306e React \u30a2\u30c0\u30d7\u30bf",
   "license": "MIT",
   "type": "module",
   "files": [
