@@ -5,4 +5,8 @@ export default defineConfig({
   plugins: [react()],
   // GitHub Pages はリポジトリ名の下に置かれる。相対で出せばどこに置いても動く
   base: "./",
+  server: {
+    // 同じ Wi-Fi のスマホから見るために、localhost の外にも出す
+    host: true,
+  },
 });
