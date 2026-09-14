@@ -25,14 +25,14 @@ const layout = layoutText({
 });
 
 describe("行の中の移動", () => {
-  it("進んだ先は前の行の末尾に着ける", () => {
+  it("進んで着いた境目は次の行の先頭に見せる", () => {
     expect(moveInline(text, { offset: 7, preferEnd: false }, 1, false)).toEqual({
       offset: 8,
-      preferEnd: true,
+      preferEnd: false,
     });
   });
 
-  it("戻った先は次の行の先頭に着ける", () => {
+  it("戻って着いた境目も次の行の先頭に見せる", () => {
     expect(moveInline(text, { offset: 9, preferEnd: false }, -1, false)).toEqual({
       offset: 8,
       preferEnd: false,

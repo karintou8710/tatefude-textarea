@@ -26,6 +26,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  /* 端末を横にしたとき iOS が本文を勝手に太らせる */
+  -webkit-text-size-adjust: 100%;
 }
 
 .page {
@@ -35,7 +37,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: 100vh;
+  /* アドレスバーの出入りで 100vh が伸び縮みすると縦書きの行長が変わり、全行が組み直る */
+  min-height: 100svh;
 }
 
 h1 {
@@ -79,50 +82,28 @@ h1 {
   gap: 6px;
 }
 
-.pair {
+.stage {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  display: flex;
   min-height: 0;
 }
 
-.pair section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-}
-
-.pair h2 {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.pair h2 span {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 12px;
-}
-
-.pair h2 button {
+.controls button {
   margin-left: auto;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
   color: var(--fg);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .editor {
   flex: 1;
   min-height: 460px;
+  /* 縦書きは横スクロール。端から始めたスワイプを履歴の戻るに取られないようにする */
+  overscroll-behavior: contain;
   /* flex アイテムの高さは auto 扱いなので、子の height: 100% が 0 に潰れる。
      grid にすると子がグリッド領域まで伸びる */
   display: grid;
@@ -131,15 +112,31 @@ h1 {
   border-radius: 10px;
 }
 
-@media (max-width: 900px) {
-  .pair {
-    grid-template-columns: 1fr;
-  }
-}
-
 footer {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
   font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  /* スマホでは本文だけ。キーボードが出たら、残った領域がそのまま器になる */
+  .page {
+    padding: 0;
+    gap: 0;
+    height: var(--app-height, 100svh);
+    min-height: 0;
+  }
+
+  header,
+  .controls,
+  footer {
+    display: none;
+  }
+
+  .editor {
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
 }

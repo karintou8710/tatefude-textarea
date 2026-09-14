@@ -23,6 +23,13 @@ afterEach(() => {
 let Editor: Ctor = CanvasTextarea;
 let writingMode: WritingMode = "vertical-rl";
 
+/** 縦書きは字が下へ並び、行が左へ重なる。同じ操作でも押すキーが変わる */
+function arrows() {
+  return writingMode === "vertical-rl"
+    ? { nextChar: "ArrowDown", prevChar: "ArrowUp", nextLine: "ArrowLeft", prevLine: "ArrowRight" }
+    : { nextChar: "ArrowRight", prevChar: "ArrowLeft", nextLine: "ArrowDown", prevLine: "ArrowUp" };
+}
+
 function setup(options: TextareaOptions = {}) {
   const container = document.createElement("div");
   Object.assign(container.style, { width: "300px", height: "200px" });
@@ -208,55 +215,125 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
   });
 
   describe("キャレットの移動", () => {
-    // Blink の textarea に合わせて、縦書きでも「下 = 次の行」「右 = 次の文字」
-    it("左右は 1 文字ずつ動く", () => {
+    // 矢印は画面で見た向きのまま。縦書きなら字送りが ↑↓ で、行送りが ←→ になる
+    it("字送りは 1 文字ずつ動く", () => {
+      const { nextChar, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
       editor.setSelection(0);
-      key(textarea, "ArrowRight");
+      key(textarea, nextChar);
       expect(editor.selection.focus).toBe(1);
-      key(textarea, "ArrowLeft");
+      key(textarea, prevChar);
       expect(editor.selection.focus).toBe(0);
     });
 
-    it("上下は行を移る", () => {
+    it("行送りは行を移る", () => {
+      const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
       editor.setSelection(0);
-      key(textarea, "ArrowDown");
+      key(textarea, nextLine);
 
       // 何文字目で折り返すかは実フォントの送り次第。
       // canvas 版は全角を 1em と決め打つが、dom 版はフォントの縦送りに従う
-      const nextLine = editor.selection.focus;
-      expect(nextLine).toBeGreaterThan(0);
-      expect(nextLine).toBeLessThan(400);
+      const landed = editor.selection.focus;
+      expect(landed).toBeGreaterThan(0);
+      expect(landed).toBeLessThan(400);
 
-      key(textarea, "ArrowUp");
+      key(textarea, prevLine);
       expect(editor.selection.focus).toBe(0);
+    });
+
+    it("選んでいるときの字送りは選んだ端に畳む", () => {
+      const { nextChar, prevChar } = arrows();
+      const { editor, textarea } = setup({ value: "あいうえお" });
+      editor.setSelection(1, 3);
+      key(textarea, prevChar);
+      expect(editor.selection).toEqual({ anchor: 1, focus: 1 });
+
+      editor.setSelection(1, 3);
+      key(textarea, nextChar);
+      expect(editor.selection).toEqual({ anchor: 3, focus: 3 });
+
+      // 逆向きに選んでいても、着くのは選んだ端
+      editor.setSelection(3, 1);
+      key(textarea, nextChar);
+      expect(editor.selection).toEqual({ anchor: 3, focus: 3 });
+    });
+
+    it("端で止まった字送りは行を移るときの狙いを消さない", () => {
+      const { nextLine, prevLine, prevChar } = arrows();
+      const { editor, textarea } = setup({ value: "あいう\nかきく" });
+      editor.setSelection(1);
+      key(textarea, prevLine);
+      expect(editor.selection.focus).toBe(0);
+
+      // 文頭では動けない。ここで狙いを捨てると、次の行送りが行頭に落ちてしまう
+      key(textarea, prevChar);
+      key(textarea, nextLine);
+      expect(editor.selection.focus).toBe(5);
+    });
+
+    it("折り返しの境目に着いたキャレットは次の行の先頭に居る", () => {
+      const { nextChar, nextLine, prevLine } = arrows();
+      const { editor, textarea } = setup({ value: `あ\n${"あ".repeat(400)}` });
+      // 何文字目で折り返すかはフォント次第なので、行送りで境目を探す
+      editor.setSelection(2);
+      key(textarea, nextLine);
+      const wrap = editor.selection.focus;
+      expect(wrap).toBeGreaterThan(2);
+
+      editor.setSelection(wrap - 1);
+      key(textarea, nextChar);
+      expect(editor.selection.focus).toBe(wrap);
+
+      // 前の行の末尾に居ると、短い 1 行目まで落ちて 1 になってしまう
+      key(textarea, prevLine);
+      expect(editor.selection.focus).toBe(2);
+    });
+
+    it("器が縮んでもキャレットを見失わない", async () => {
+      // スマホでキーボードが出ると器が縮む。縦書きなら行の長さごと変わって全部組み直る
+      const { container, editor } = setup({ value: "あ".repeat(400) });
+      editor.focus();
+      editor.setSelection(400);
+
+      container.style.height = "80px";
+      // ResizeObserver は次のフレームで来る
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      const caret = editor.caretRect;
+      expect(caret.x).toBeGreaterThanOrEqual(0);
+      expect(caret.x + caret.width).toBeLessThanOrEqual(container.clientWidth);
+      expect(caret.y).toBeGreaterThanOrEqual(0);
+      expect(caret.y + caret.height).toBeLessThanOrEqual(container.clientHeight);
     });
 
     it("Shift を足すと選択が伸びる", () => {
+      const { nextChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
       editor.setSelection(0);
-      key(textarea, "ArrowRight", { shiftKey: true });
-      key(textarea, "ArrowRight", { shiftKey: true });
+      key(textarea, nextChar, { shiftKey: true });
+      key(textarea, nextChar, { shiftKey: true });
       expect(editor.selection).toEqual({ anchor: 0, focus: 2 });
     });
 
-    it("修飾キー付きの上下で文頭と文末へ飛ぶ", () => {
+    it("修飾キー付きの行送りで文頭と文末へ飛ぶ", () => {
+      const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
       editor.setSelection(1);
-      key(textarea, "ArrowDown", { metaKey: true });
+      key(textarea, nextLine, { metaKey: true });
       expect(editor.selection.focus).toBe(3);
-      key(textarea, "ArrowUp", { metaKey: true });
+      key(textarea, prevLine, { metaKey: true });
       expect(editor.selection.focus).toBe(0);
     });
 
-    it("Option 付きの上下で段落の端へ飛ぶ", () => {
+    it("Option 付きの行送りで段落の端へ飛ぶ", () => {
+      const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あい\nうえお\nかき" });
       editor.setSelection(4);
-      key(textarea, "ArrowUp", { altKey: true });
+      key(textarea, prevLine, { altKey: true });
       expect(editor.selection.focus).toBe(3);
       // 段落の頭に居るときは、その段落の末まで
-      key(textarea, "ArrowDown", { altKey: true });
+      key(textarea, nextLine, { altKey: true });
       expect(editor.selection.focus).toBe(6);
     });
 
@@ -271,13 +348,14 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(focus).toBeLessThan(400);
     });
 
-    it("下キーを繰り返しても文末へ飛ばない", () => {
+    it("行送りを繰り返しても文末へ飛ばない", () => {
+      const { nextLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
       editor.setSelection(0);
 
       const seen: number[] = [];
       for (let i = 0; i < 8; i++) {
-        key(textarea, "ArrowDown");
+        key(textarea, nextLine);
         seen.push(editor.selection.focus);
       }
 
@@ -288,9 +366,10 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
     it("改行だけの本文でも行頭へ戻れる", () => {
       // 改行の矩形は潰れているので、行の中を引くときに読み飛ばしてしまっていた
+      const { prevLine } = arrows();
       const { editor, textarea } = setup({ value: "\n" });
       editor.setSelection(1);
-      key(textarea, "ArrowUp");
+      key(textarea, prevLine);
       key(textarea, "Home");
       expect(editor.selection.focus).toBe(0);
     });
@@ -397,6 +476,29 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       await nextFrames();
       expect(editor.value).toBe("");
       expect(editor.lineCount).toBe(1);
+    });
+  });
+
+  describe("ポインタ", () => {
+    // WebKit は pointerdown の preventDefault では合成マウスイベントを止めない。
+    // touchend の後に届く mousedown に既定動作を許すと、focus が surface に移って
+    // hidden input から焦点が落ちる (iOS でタップしてもキャレットが出なくなる)
+    it("あとから届く mousedown にフォーカスを奪わせない", () => {
+      const { container, editor, textarea } = setup({ value: "吾輩は猫である。" });
+      const surface = container.firstElementChild as HTMLElement;
+
+      editor.focus();
+      expect(document.activeElement).toBe(textarea);
+
+      const mousedown = new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      });
+      surface.dispatchEvent(mousedown);
+
+      expect(mousedown.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(textarea);
     });
   });
 });

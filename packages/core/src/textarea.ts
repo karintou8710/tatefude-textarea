@@ -9,6 +9,7 @@ import {
   resolveOptions,
   type Selection,
   type TextareaOptions,
+  type WritingMode,
 } from "./types";
 
 interface Composition {
@@ -255,39 +256,14 @@ export class Textarea {
     const shift = event.shiftKey;
     const word = event.altKey;
 
+    const arrow = arrowOf(event.key, this.options.writingMode);
+    if (arrow) {
+      event.preventDefault();
+      this.moveArrow(arrow.axis, arrow.direction, { accel, shift, word });
+      return;
+    }
+
     switch (event.key) {
-      // Blink の textarea に合わせる。縦書きでも「下 = 次の行」「右 = 次の文字」と
-      // 論理の意味を保ち、物理の向きには合わせない
-      case "ArrowUp":
-        event.preventDefault();
-        if (accel) this.moveCaret({ offset: 0, preferEnd: false }, shift);
-        else if (word) this.moveCaret(this.paragraphEdge(-1), shift);
-        else this.moveAcross(-1, shift);
-        return;
-      case "ArrowDown":
-        event.preventDefault();
-        if (accel) this.moveCaret({ offset: this.text.length, preferEnd: true }, shift);
-        else if (word) this.moveCaret(this.paragraphEdge(1), shift);
-        else this.moveAcross(1, shift);
-        return;
-      case "ArrowLeft":
-        event.preventDefault();
-        this.moveCaret(
-          accel
-            ? this.backend.lineEdge(this.caret, "start")
-            : moveInline(this.text, this.caret, -1, word),
-          shift,
-        );
-        return;
-      case "ArrowRight":
-        event.preventDefault();
-        this.moveCaret(
-          accel
-            ? this.backend.lineEdge(this.caret, "end")
-            : moveInline(this.text, this.caret, 1, word),
-          shift,
-        );
-        return;
       // Blink は縦書きだと何もしないが、使えないままにする理由が無い
       case "Home":
         event.preventDefault();
@@ -364,7 +340,7 @@ export class Textarea {
 
     const at = from + text.length;
     this.anchor = at;
-    this.caret = { offset: at, preferEnd: true };
+    this.caret = { offset: at, preferEnd: false };
     this.goal = null;
 
     this.resetBlink();
@@ -398,6 +374,51 @@ export class Textarea {
     if (!extend) this.anchor = caret.offset;
     this.history.breakCoalescing();
     this.afterSelectionChange();
+  }
+
+  /** 矢印ひとつぶんの移動。軸が決まれば、刻みは修飾キーで決まる */
+  private moveArrow(
+    axis: Axis,
+    direction: 1 | -1,
+    mods: { accel: boolean; shift: boolean; word: boolean },
+  ): void {
+    const { accel, shift, word } = mods;
+
+    if (axis === "inline") {
+      if (accel) this.moveCaret(this.backend.lineEdge(this.caret, edgeOf(direction)), shift);
+      else this.stepInline(direction, word, shift);
+      return;
+    }
+
+    if (accel) {
+      const caret =
+        direction === 1
+          ? { offset: this.text.length, preferEnd: true }
+          : { offset: 0, preferEnd: false };
+      this.moveCaret(caret, shift);
+    } else if (word) this.moveCaret(this.paragraphEdge(direction), shift);
+    else this.moveAcross(direction, shift);
+  }
+
+  /**
+   * 行の中を 1 つ動く。縦書きでは下 / 上。
+   * 選んでいるときの 1 文字ぶんは、選んだ端に畳むだけで進まない (Blink も同じ)。
+   */
+  private stepInline(direction: 1 | -1, byWord: boolean, extend: boolean): void {
+    const [from, to] = this.range();
+    if (!extend && !byWord && from !== to) {
+      this.moveCaret(
+        { offset: direction === 1 ? to : from, preferEnd: this.caret.preferEnd },
+        false,
+      );
+      return;
+    }
+
+    const next = moveInline(this.text, this.caret, direction, byWord);
+    // 端に着いていて動けないなら何もしない。行を移るときの狙いも消さずに残す
+    const anchor = extend ? this.anchor : next.offset;
+    if (next.offset === this.caret.offset && anchor === this.anchor) return;
+    this.moveCaret(next, extend);
   }
 
   private moveAcross(direction: 1 | -1, extend: boolean): void {
@@ -447,6 +468,11 @@ export class Textarea {
       );
     };
 
+    // WebKit は pointerdown の preventDefault では合成マウスイベントを止めない。
+    // touchend の後に届く mousedown が surface (div) にフォーカスを移そうとして、
+    // 入れたばかりの hidden input から焦点を奪う
+    on("mousedown", (event) => event.preventDefault());
+
     on("pointerdown", (event) => {
       if (event.button !== 0 || this.options.disabled) return;
       event.preventDefault();
@@ -463,8 +489,13 @@ export class Textarea {
         return;
       }
 
-      this.dragging = true;
-      surface.setPointerCapture(event.pointerId);
+      // 指はスワイプでスクロールさせたい。ブラウザがパンと決める前に
+      // ドラッグ選択へ入ると、決まるまでの数 px ぶんが選ばれて残る。
+      // ポインタを捕らえるとパン自体を邪魔するので、どちらもしない
+      if (event.pointerType !== "touch") {
+        this.dragging = true;
+        surface.setPointerCapture(event.pointerId);
+      }
       this.caret = hit;
       if (!event.shiftKey) this.anchor = hit.offset;
       this.goal = null;
@@ -556,7 +587,11 @@ export class Textarea {
     this.backend.ensureVisible(caret);
 
     // IME の候補ウィンドウをキャレットの隣に出させる
-    this.input.moveTo(this.backend.caretRect(caret), this.options.writingMode);
+    this.input.moveTo(
+      this.backend.caretRect(caret),
+      this.options.writingMode,
+      this.options.font.size,
+    );
   }
 
   private handleFocus(): void {
@@ -598,6 +633,34 @@ export class Textarea {
 }
 
 /** 改行を \n に揃える。textarea もクリップボードも \r\n を投げてくる */
+/** 字の並ぶ向き (inline) か、行の重なる向き (block) か */
+type Axis = "inline" | "block";
+
+/**
+ * 矢印キーを、画面で見た向きのまま軸に割り当てる。
+ * 縦書きは字が下へ並び行が左へ重なるので、字送りが ↑↓・行送りが ←→ になる。
+ * (ネイティブの textarea は縦書きでも ←→ が字送りのままで、そこだけ合わせていない)
+ */
+function arrowOf(key: string, writingMode: WritingMode): { axis: Axis; direction: 1 | -1 } | null {
+  const vertical = writingMode === "vertical-rl";
+  switch (key) {
+    case "ArrowDown":
+      return vertical ? { axis: "inline", direction: 1 } : { axis: "block", direction: 1 };
+    case "ArrowUp":
+      return vertical ? { axis: "inline", direction: -1 } : { axis: "block", direction: -1 };
+    case "ArrowLeft":
+      return vertical ? { axis: "block", direction: 1 } : { axis: "inline", direction: -1 };
+    case "ArrowRight":
+      return vertical ? { axis: "block", direction: -1 } : { axis: "inline", direction: 1 };
+    default:
+      return null;
+  }
+}
+
+function edgeOf(direction: 1 | -1): "start" | "end" {
+  return direction === 1 ? "end" : "start";
+}
+
 function normalize(text: string): string {
   return text.replace(/\r\n?/g, "\n");
 }

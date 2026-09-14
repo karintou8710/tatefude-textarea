@@ -129,17 +129,18 @@ const mixed = "あい\nうえお\n\nかき";
 
 describe("2 つのバックエンドが同じところに着く", () => {
   it.each([
-    ["行を下へ連打", wrap, 0, repeat(25, "ArrowDown")],
-    ["行を上へ連打", wrap, 20, repeat(25, "ArrowUp")],
-    ["文字を左へ連打", wrap, 3, repeat(6, "ArrowLeft")],
-    ["文字を右へ連打", wrap, 18, repeat(6, "ArrowRight")],
-    ["長文で行を下へ連打", long, 0, repeat(30, "ArrowDown")],
+    // 縦書きなので、字送りが ↑↓ で行送りが ←→
+    ["行を次へ連打", wrap, 0, repeat(25, "ArrowLeft")],
+    ["行を前へ連打", wrap, 20, repeat(25, "ArrowRight")],
+    ["文字を戻る連打", wrap, 3, repeat(6, "ArrowUp")],
+    ["文字を進む連打", wrap, 18, repeat(6, "ArrowDown")],
+    ["長文で行を次へ連打", long, 0, repeat(30, "ArrowLeft")],
     ["長文で PageDown", long, 0, repeat(8, "PageDown")],
     ["長文で PageUp", long, 399, repeat(8, "PageUp")],
-    ["Shift で行を伸ばす", wrap, 5, repeat(15, "ArrowDown", { shiftKey: true })],
-    ["改行混じりで行を下へ", mixed, 0, repeat(14, "ArrowDown")],
-    ["改行混じりで行を上へ", mixed, 12, repeat(14, "ArrowUp")],
-    ["段落の端へ", mixed, 5, repeat(6, "ArrowDown", { altKey: true })],
+    ["Shift で行を伸ばす", wrap, 5, repeat(15, "ArrowLeft", { shiftKey: true })],
+    ["改行混じりで行を次へ", mixed, 0, repeat(14, "ArrowLeft")],
+    ["改行混じりで行を前へ", mixed, 12, repeat(14, "ArrowRight")],
+    ["段落の端へ", mixed, 5, repeat(6, "ArrowLeft", { altKey: true })],
   ])("%s", (_label, value, start, keys) => {
     const { canvas, dom } = pair(value);
     canvas.editor.setSelection(start);
@@ -149,14 +150,14 @@ describe("2 つのバックエンドが同じところに着く", () => {
   });
 
   it.each([
-    ["行頭行末", wrap, 12, [["End"], ["Home"], ["ArrowDown"], ["End"], ["Home"], ["ArrowUp"]]],
+    ["行頭行末", wrap, 12, [["End"], ["Home"], ["ArrowLeft"], ["End"], ["Home"], ["ArrowRight"]]],
     [
       "文頭文末",
       wrap,
       8,
       [
-        ["ArrowDown", { metaKey: true }],
-        ["ArrowUp", { metaKey: true }],
+        ["ArrowLeft", { metaKey: true }],
+        ["ArrowRight", { metaKey: true }],
       ],
     ],
   ] as const)("%s", (_label, value, start, keys) => {

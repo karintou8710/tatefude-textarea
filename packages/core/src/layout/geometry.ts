@@ -109,8 +109,9 @@ export function offsetInLine(line: LayoutLine, offset: number): number {
 }
 
 /**
- * キャレットの矩形。Range の潰れた矩形と同じで、厚みは持たない。
- * 縦書きなら幅 em の横棒、横書きなら高さ em の縦棒になる場所を指す。
+ * キャレットの矩形。Range の潰れた矩形と同じで、送り方向の厚みは持たない。
+ * 行を横切る向きには行ボックス全体を占める。ネイティブの textarea がそうなっている
+ * (Blink: caret_rect.cc の ComputeLocalCaretRect が行ボックスまで広げる)。
  */
 export function caretGeometry(
   layout: Layout,
@@ -124,15 +125,14 @@ export function caretGeometry(
   return lineSpanRect(geo, index, inline, 0);
 }
 
-/** 行の中心に em ぶんの厚みを置いた、inline 方向に length の矩形 */
+/** 行ボックス全体を横切る、inline 方向に length の矩形 */
 function lineSpanRect(geo: Geometry, index: number, inline: number, length: number): Rect {
   const { x, y } = toPhysical(geo, index, inline);
-  const offset = (geo.lineHeight - geo.em) / 2;
   if (isVertical(geo)) {
     // toPhysical は行の block 側の端を返す。縦書きなら列の右端
-    return { x: x - geo.lineHeight + offset, y, width: geo.em, height: length };
+    return { x: x - geo.lineHeight, y, width: geo.lineHeight, height: length };
   }
-  return { x, y: y + offset, width: length, height: geo.em };
+  return { x, y, width: length, height: geo.lineHeight };
 }
 
 export function selectionRects(layout: Layout, geo: Geometry, from: number, to: number): Rect[] {

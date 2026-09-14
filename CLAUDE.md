@@ -19,8 +19,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **両バックエンドは同じ振る舞いをする。**片方だけ直したら、もう片方も見る。
 
-**キー操作は Blink の `<textarea>` を基準にする。**縦書きでも「下 = 次の行」「右 = 次の文字」。
+**矢印は画面で見た向きに割り当てる。**縦書きなら字送りが `↑↓`、行送りが `←→`。
+ここだけはネイティブの `<textarea>` と違う (あちらは縦書きでも `←→` が字送り)。
+
+**それ以外のキー操作は Blink の `<textarea>` を基準にする。**
 迷ったら `test/browser/native.test.ts` に本物の textarea を並べて測る。
+矢印は軸が入れ替わるので、こちらへ打つキーだけ `rotate()` で向きを直している。
 
 ## テスト
 
