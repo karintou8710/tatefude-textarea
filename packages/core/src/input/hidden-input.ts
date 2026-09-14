@@ -1,0 +1,165 @@
+export interface HiddenInputHandlers {
+  insert(text: string): void;
+  compositionStart(): void;
+  compositionUpdate(text: string, activeStart: number, activeEnd: number): void;
+  compositionEnd(text: string): void;
+  keyDown(event: KeyboardEvent): void;
+  copy(): string;
+  cut(): string;
+  paste(text: string): void;
+  focus(): void;
+  blur(): void;
+}
+
+/**
+ * 画面に出さない textarea。IME とクリップボードはブラウザに任せたいので、
+ * 入力を受けるのはこの要素で、canvas は描くだけにする。
+ */
+export class HiddenInput {
+  readonly element: HTMLTextAreaElement;
+  private composing = false;
+  private disposers: (() => void)[] = [];
+
+  constructor(
+    container: HTMLElement,
+    private handlers: HiddenInputHandlers,
+  ) {
+    const element = container.ownerDocument.createElement("textarea");
+    element.setAttribute("autocapitalize", "off");
+    element.setAttribute("autocorrect", "off");
+    element.setAttribute("autocomplete", "off");
+    element.setAttribute("spellcheck", "false");
+    element.setAttribute("aria-hidden", "false");
+    element.tabIndex = 0;
+    element.rows = 1;
+    Object.assign(element.style, {
+      position: "absolute",
+      top: "0px",
+      left: "0px",
+      width: "1px",
+      height: "1px",
+      padding: "0",
+      margin: "0",
+      border: "none",
+      outline: "none",
+      resize: "none",
+      overflow: "hidden",
+      // display:none や visibility:hidden にすると IME が動かない
+      opacity: "0",
+      background: "transparent",
+      color: "transparent",
+      caretColor: "transparent",
+      zIndex: "1",
+      whiteSpace: "pre",
+    } satisfies Partial<CSSStyleDeclaration>);
+
+    container.appendChild(element);
+    this.element = element;
+    this.bind();
+  }
+
+  private bind(): void {
+    const el = this.element;
+    const on = <K extends keyof HTMLElementEventMap>(
+      type: K,
+      listener: (event: HTMLElementEventMap[K]) => void,
+    ) => {
+      el.addEventListener(type, listener as EventListener);
+      this.disposers.push(() => el.removeEventListener(type, listener as EventListener));
+    };
+
+    on("compositionstart", () => {
+      this.composing = true;
+      this.handlers.compositionStart();
+    });
+
+    on("compositionend", (event) => {
+      this.composing = false;
+      const text = event.data ?? el.value;
+      el.value = "";
+      this.handlers.compositionEnd(text);
+    });
+
+    on("input", (event) => {
+      const inputEvent = event as InputEvent;
+      if (this.composing) {
+        // compositionupdate の時点では value と選択が古いことがあるので、ここで読む
+        this.handlers.compositionUpdate(
+          el.value,
+          el.selectionStart ?? el.value.length,
+          el.selectionEnd ?? el.value.length,
+        );
+        return;
+      }
+      // compositionend が先に来たあとの取りこぼし。中身は既に確定済み
+      if (inputEvent.inputType === "insertCompositionText" || inputEvent.isComposing) {
+        el.value = "";
+        return;
+      }
+      const value = el.value;
+      el.value = "";
+      if (value) this.handlers.insert(value);
+    });
+
+    on("keydown", (event) => {
+      if (this.composing || event.isComposing || event.keyCode === 229) return;
+      this.handlers.keyDown(event);
+    });
+
+    on("copy", (event) => {
+      event.preventDefault();
+      event.clipboardData?.setData("text/plain", this.handlers.copy());
+    });
+
+    on("cut", (event) => {
+      event.preventDefault();
+      event.clipboardData?.setData("text/plain", this.handlers.cut());
+    });
+
+    on("paste", (event) => {
+      event.preventDefault();
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text) this.handlers.paste(text);
+    });
+
+    on("focus", () => this.handlers.focus());
+    on("blur", () => {
+      this.composing = false;
+      this.handlers.blur();
+    });
+  }
+
+  get isComposing(): boolean {
+    return this.composing;
+  }
+
+  /** IME の候補ウィンドウをキャレットの脇に出させる */
+  moveTo(x: number, y: number, size: number): void {
+    const style = this.element.style;
+    style.left = `${Math.round(x)}px`;
+    style.top = `${Math.round(y)}px`;
+    style.fontSize = `${size}px`;
+  }
+
+  setReadOnly(readOnly: boolean): void {
+    this.element.readOnly = readOnly;
+  }
+
+  setDisabled(disabled: boolean): void {
+    this.element.disabled = disabled;
+  }
+
+  focus(): void {
+    this.element.focus({ preventScroll: true });
+  }
+
+  blur(): void {
+    this.element.blur();
+  }
+
+  destroy(): void {
+    for (const dispose of this.disposers) dispose();
+    this.disposers.length = 0;
+    this.element.remove();
+  }
+}

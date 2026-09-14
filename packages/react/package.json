@@ -1,0 +1,38 @@
+{
+  "name": "canvas-vert-textarea-react",
+  "version": "0.0.0",
+  "description": "canvas-vert-textarea の React アダプタ",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "canvas-vert-textarea": "workspace:^",
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "canvas-vert-textarea": "workspace:*",
+    "react": "^19.2.8",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
+  },
+  "sideEffects": false
+}

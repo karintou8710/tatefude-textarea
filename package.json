@@ -1,0 +1,18 @@
+{
+  "name": "canvas-vert-textarea-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.23.0",
+  "scripts": {
+    "dev": "pnpm --filter canvas-vert-textarea-demo dev",
+    "build": "pnpm --filter canvas-vert-textarea --filter canvas-vert-textarea-react build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "pnpm --filter canvas-vert-textarea test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.13"
+  }
+}

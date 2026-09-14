@@ -1,0 +1,8 @@
+node_modules
+dist
+.DS_Store
+*.log
+
+# vitest browser mode がテスト失敗時に吐くもの
+.vitest-attachments
+__screenshots__

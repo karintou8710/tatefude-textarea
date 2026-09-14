@@ -1,0 +1,39 @@
+{
+  "name": "canvas-vert-textarea",
+  "version": "0.0.0",
+  "description": "canvas に自前で組む縦書きのテキストエリア",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project node",
+    "test:browser": "vitest run --project browser",
+    "test:all": "vitest run"
+  },
+  "devDependencies": {
+    "@vitest/browser": "^4.1.10",
+    "@vitest/browser-playwright": "^4.1.10",
+    "playwright": "^1.61.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.10",
+    "vitest": "^4.1.10"
+  },
+  "sideEffects": false
+}
