@@ -50,6 +50,10 @@ export interface LayoutParams {
   writingMode?: WritingMode;
 }
 
+function isHangingSpace(text: string): boolean {
+  return text === " " || text === "\t";
+}
+
 /** 禁則で行を戻す上限。これを超えると諦めてそのまま切る */
 const KINSOKU_BACKTRACK_LIMIT = 6;
 
@@ -94,6 +98,11 @@ export function layoutText({
 
       if (end < graphemes.length && kinsoku) {
         end = adjustBreak(graphemes, cursor, end);
+      }
+      // pre-wrap では、折り返しを起こした空白は行末にぶら下がって行長に効かない。
+      // ネイティブの textarea と同じ位置で折るために、この 1 つは行に残す
+      if (end < graphemes.length && isHangingSpace(graphemes[end].text)) {
+        end += 1;
       }
 
       lines.push(

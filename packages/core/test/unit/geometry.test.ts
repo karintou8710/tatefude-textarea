@@ -77,15 +77,15 @@ describe("横書き", () => {
 });
 
 describe("キャレットの位置", () => {
-  // 1 行目の中心は 190 - 18/2 = 181。キャレットはそこに em ぶんの厚みで乗る
+  // ネイティブと同じで、行ボックス全体 (= 行送り 18) を横切る
   it("行の中を下へ進む", () => {
-    expect(caretGeometry(layout, geometry, 0)).toEqual({ x: 176, y: 10, width: 10, height: 0 });
-    expect(caretGeometry(layout, geometry, 3)).toEqual({ x: 176, y: 40, width: 10, height: 0 });
+    expect(caretGeometry(layout, geometry, 0)).toEqual({ x: 172, y: 10, width: 18, height: 0 });
+    expect(caretGeometry(layout, geometry, 3)).toEqual({ x: 172, y: 40, width: 18, height: 0 });
   });
 
   it("折り返しの境目は preferEnd で行が変わる", () => {
-    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ x: 158, y: 10 });
-    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ x: 176, y: 90 });
+    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ x: 154, y: 10 });
+    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ x: 172, y: 90 });
   });
 
   it("横書きでは縦棒になる", () => {
@@ -97,8 +97,8 @@ describe("キャレットの位置", () => {
       kinsoku: false,
       writingMode: "horizontal-tb",
     });
-    // 横書きの送りは fakeMeasurer の字幅 (em の半分)。1 行目の中心は 10 + 18/2 = 19
-    expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 14, width: 0, height: 10 });
+    // 横書きの送りは fakeMeasurer の字幅 (em の半分)
+    expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 10, width: 0, height: 18 });
   });
 
   it("改行のあとは次の行の頭で確定する", () => {
@@ -135,7 +135,9 @@ describe("座標からキャレットへ", () => {
   it("キャレットの座標と往復する", () => {
     for (const offset of [0, 1, 5, 8, 9, 10]) {
       const rect = caretGeometry(layout, geometry, offset, true);
-      expect(offsetFromPoint(layout, geometry, rect.x, rect.y + 1).offset).toBe(offset);
+      // 矩形は行ボックス全体なので、行を引くには中心を使う
+      const center = rect.x + rect.width / 2;
+      expect(offsetFromPoint(layout, geometry, center, rect.y + 1).offset).toBe(offset);
     }
   });
 });

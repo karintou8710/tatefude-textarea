@@ -146,17 +146,23 @@ export class HiddenInput {
    * 縦組みの中身は右端から左へ伸びるので、要素の右端を行の右端に合わせると
    * 変換中の文字がちょうどキャレットの行に乗る (line-height: 1 が前提)。
    *
-   * @param rect キャレットの矩形。container 基準で、厚みは持たない
+   * @param rect キャレットの矩形。container 基準で、行を横切る向きは行ボックス全体
    * @param mode 変換中の文字と候補ウィンドウをどちら向きに出すか
+   * @param size 全角 1 文字ぶん。変換中の字は行ボックスではなくこの幅に乗る
    */
-  moveTo(rect: { x: number; y: number; width: number; height: number }, mode: WritingMode): void {
+  moveTo(
+    rect: { x: number; y: number; width: number; height: number },
+    mode: WritingMode,
+    size: number,
+  ): void {
     const style = this.element.style;
     const vertical = mode === "vertical-rl";
+    const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
     style.writingMode = mode;
     style.cursor = vertical ? "vertical-text" : "text";
-    style.left = `${Math.round(vertical ? rect.x + rect.width : rect.x) - (vertical ? 1 : 0)}px`;
-    style.top = `${Math.round(rect.y)}px`;
-    style.fontSize = `${Math.round(vertical ? rect.width : rect.height)}px`;
+    style.left = `${vertical ? Math.round(center + size / 2) - 1 : Math.round(rect.x)}px`;
+    style.top = `${vertical ? Math.round(rect.y) : Math.round(center - size / 2)}px`;
+    style.fontSize = `${size}px`;
   }
 
   setReadOnly(readOnly: boolean): void {

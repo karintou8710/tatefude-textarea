@@ -3,6 +3,7 @@ import type { WritingMode } from "tatefude-textarea";
 import { Textarea, type TextareaHandle } from "tatefude-textarea-react";
 import { sampleText } from "./sample";
 import { usePrefersDark } from "./useColorScheme";
+import { useViewportHeight } from "./useViewportHeight";
 
 const lightTheme = {
   text: "#1a1a1a",
@@ -36,30 +37,16 @@ export function App() {
   const [family, setFamily] = useState(fonts[0].value);
   const [kinsoku, setKinsoku] = useState(true);
   const [smallKanaShift, setSmallKanaShift] = useState(0.08);
-  const [linked, setLinked] = useState(true);
   const [writingMode, setWritingMode] = useState<WritingMode>("vertical-rl");
-  const canvasRef = useRef<TextareaHandle>(null);
-  const domRef = useRef<TextareaHandle>(null);
+  const editorRef = useRef<TextareaHandle>(null);
   const dark = usePrefersDark();
-
-  const shared = {
-    writingMode,
-    kinsoku,
-    smallKanaShift,
-    font: { family, size, lineHeight },
-    padding: 24,
-    theme: dark ? darkTheme : lightTheme,
-    placeholder: "ここに書く",
-  };
+  useViewportHeight();
 
   return (
     <div className="page">
       <header>
         <h1>tatefude-textarea</h1>
-        <p className="lead">
-          同じ API の 2 実装を並べています。左が canvas に字を 1 つずつ置くもの、 右がブラウザの
-          writing-mode に組ませて Range API で読み返すもの。
-        </p>
+        <p className="lead">ブラウザの writing-mode に組ませて、Range API で読み返す実装。</p>
       </header>
 
       <div className="controls">
@@ -122,51 +109,36 @@ export function App() {
           <input type="checkbox" checked={kinsoku} onChange={(e) => setKinsoku(e.target.checked)} />
           禁則処理
         </label>
-        <label className="check">
-          <input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} />
-          本文を連動させる
-        </label>
+        <button type="button" onClick={() => editorRef.current?.focus()}>
+          フォーカス
+        </button>
       </div>
 
-      <div className="pair">
-        <section>
-          <h2>
-            canvas <span>字を 1 つずつ置く</span>
-            <button type="button" onClick={() => canvasRef.current?.focus()}>
-              フォーカス
-            </button>
-          </h2>
-          <div className="editor">
-            <Textarea
-              ref={canvasRef}
-              backend="canvas"
-              {...shared}
-              {...(linked ? { value, onChange: setValue } : { defaultValue: value })}
-            />
-          </div>
-        </section>
-
-        <section>
-          <h2>
-            dom <span>writing-mode に組ませる</span>
-            <button type="button" onClick={() => domRef.current?.focus()}>
-              フォーカス
-            </button>
-          </h2>
-          <div className="editor">
-            <Textarea
-              ref={domRef}
-              backend="dom"
-              {...shared}
-              {...(linked ? { value, onChange: setValue } : { defaultValue: value })}
-            />
-          </div>
-        </section>
+      <div className="stage">
+        <div className="editor">
+          <Textarea
+            ref={editorRef}
+            backend="dom"
+            writingMode={writingMode}
+            kinsoku={kinsoku}
+            smallKanaShift={smallKanaShift}
+            font={{ family, size, lineHeight }}
+            padding={24}
+            theme={dark ? darkTheme : lightTheme}
+            placeholder="ここに書く"
+            value={value}
+            onChange={setValue}
+          />
+        </div>
       </div>
 
       <footer>
         <span>{value.length} 文字</span>
-        <span>↑↓ で行を移る、←→ で 1 文字ずつ (Blink の textarea と同じ)</span>
+        <span>
+          {writingMode === "vertical-rl"
+            ? "↑↓ で 1 文字ずつ、←→ で行を移る"
+            : "←→ で 1 文字ずつ、↑↓ で行を移る"}
+        </span>
       </footer>
     </div>
   );

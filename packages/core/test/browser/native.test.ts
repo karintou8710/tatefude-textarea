@@ -1,4 +1,4 @@
-import { userEvent } from "@vitest/browser/context";
+import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 import { CanvasTextarea } from "../../src/canvas/index";
 import { DomTextarea } from "../../src/dom/index";
@@ -9,6 +9,10 @@ import type { TextareaOptions } from "../../src/types";
  * Blink の <textarea> を基準にする。
  * 縦書きのキャレット移動がどう動くのが「普通」なのかは、
  * 仕様書よりブラウザの実装が答えなので、隣に置いて同じキーを打つ。
+ *
+ * ただし矢印の割り当てだけは合わせていない。ネイティブは縦書きでも
+ * ←→ が字送りのままだが、こちらは画面で見た向き (字送り ↑↓ / 行送り ←→) にした。
+ * そこで、cases はネイティブに打つキーで書き、こちらへ打つときだけ向きを直す。
  */
 
 const SIZE = 20;
@@ -75,6 +79,18 @@ async function traceNative(value: string, start: number, keys: string[]) {
   return steps;
 }
 
+/** 同じ意味になるキーへ。縦書きでは字送りと行送りの軸が入れ替わる */
+const ROTATE: Record<string, string> = {
+  ArrowRight: "ArrowDown",
+  ArrowLeft: "ArrowUp",
+  ArrowDown: "ArrowLeft",
+  ArrowUp: "ArrowRight",
+};
+
+function rotate(stroke: string): string {
+  return stroke.replace(/Arrow(Up|Down|Left|Right)/g, (key) => ROTATE[key]);
+}
+
 async function traceOurs(
   Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea,
   value: string,
@@ -86,7 +102,7 @@ async function traceOurs(
   target.editor.setSelection(start);
   const steps: string[] = [];
   for (const stroke of keys) {
-    await userEvent.keyboard(stroke);
+    await userEvent.keyboard(rotate(stroke));
     const { anchor, focus } = target.editor.selection;
     steps.push(`${stroke} [${Math.min(anchor, focus)},${Math.max(anchor, focus)}]`);
   }
@@ -100,6 +116,10 @@ function diff(label: string, base: string[], mine: string[]) {
 }
 
 const PARAGRAPHS = "あいうえお\nかきくけこさしすせそたちつてと\nなにぬねの";
+const DEMO = "吾輩は猫である。名前はまだ無い。\nどこで生れたかとんと見当がつかぬ。\n\nにゃー";
+// 1 行目は改行で切れて短い。折り返しの境目 (13) から上へ動くと、
+// 前の行の末尾に居たか次の行の先頭に居たかで着く先が分かれる
+const WRAP = `あい\n${"う".repeat(15)}`;
 
 const cases: [name: string, value: string, start: number, keys: string[]][] = [
   ["改行を跨いで下へ", "あいう\nかきく", 0, Array(8).fill("{ArrowDown}")],
@@ -113,6 +133,58 @@ const cases: [name: string, value: string, start: number, keys: string[]][] = [
   ["末尾が改行", "あい\n", 0, Array(4).fill("{ArrowDown}")],
   ["Shift で伸ばす", "あ".repeat(25), 5, Array(6).fill("{Shift>}{ArrowDown}{/Shift}")],
   ["Shift で行を移る", "あ".repeat(25), 5, Array(2).fill("{Shift>}{ArrowDown}{/Shift}")],
+
+  // デモに近い本文。段落と折り返しと空行が混ざる
+  ["混在で下へ長く", DEMO, 3, Array(14).fill("{ArrowDown}")],
+  ["混在で上へ長く", DEMO, 36, Array(14).fill("{ArrowUp}")],
+  ["混在で右へ長く", DEMO, 10, Array(14).fill("{ArrowRight}")],
+  ["混在で左へ長く", DEMO, 30, Array(14).fill("{ArrowLeft}")],
+  ["折り返しの端から下へ", DEMO, 16, Array(6).fill("{ArrowDown}")],
+  ["下ってから上る", DEMO, 5, [...Array(6).fill("{ArrowDown}"), ...Array(6).fill("{ArrowUp}")]],
+  [
+    "下と右を混ぜる",
+    DEMO,
+    5,
+    ["{ArrowDown}", "{ArrowRight}", "{ArrowDown}", "{ArrowLeft}", "{ArrowDown}", "{ArrowUp}"],
+  ],
+
+  // 選んでいるときの ← → は、選んだ端に畳むだけで 1 文字は進まない
+  [
+    "選んでから左",
+    PARAGRAPHS,
+    1,
+    [...Array(2).fill("{Shift>}{ArrowRight}{/Shift}"), "{ArrowLeft}"],
+  ],
+  [
+    "選んでから右",
+    PARAGRAPHS,
+    1,
+    [...Array(2).fill("{Shift>}{ArrowRight}{/Shift}"), "{ArrowRight}"],
+  ],
+  [
+    "逆向きに選んでから右",
+    PARAGRAPHS,
+    3,
+    [...Array(2).fill("{Shift>}{ArrowLeft}{/Shift}"), "{ArrowRight}"],
+  ],
+
+  // 端で動けなかった ← → は、行を移るときの狙いを消さない
+  ["端で止まっても狙いは残る", "あいう\nかきく", 1, ["{ArrowUp}", "{ArrowLeft}", "{ArrowDown}"]],
+
+  // 折り返しの境目に着いたキャレットは、次の行の先頭に居る
+  ["右で折り返しの境目に着く", WRAP, 12, ["{ArrowRight}", "{ArrowUp}"]],
+  ["左で折り返しの境目に着く", WRAP, 14, ["{ArrowLeft}", "{ArrowUp}"]],
+  ["打って折り返しの境目に着く", WRAP, 12, ["ん", "{ArrowUp}"]],
+  ["消して折り返しの境目に着く", WRAP, 14, ["{Backspace}", "{ArrowUp}"]],
+];
+
+/**
+ * ⌘ と ⌥ の割り当ては macOS だけのもの。
+ * Blink の表 (editing_behavior.cc) で ⌥ + 上下が段落送りになるのは Mac で、
+ * Linux / Windows では Ctrl が同じ役をする。⌘ + 矢印に至っては表に無く、
+ * Mac では OS のキーバインドから来る。だから本物と突き合わせられるのは Mac だけ。
+ */
+const macCases: [name: string, value: string, start: number, keys: string[]][] = [
   ["段落の頭へ", PARAGRAPHS, 12, Array(3).fill("{Alt>}{ArrowUp}{/Alt}")],
   ["段落の末へ", PARAGRAPHS, 12, Array(3).fill("{Alt>}{ArrowDown}{/Alt}")],
   ["文頭へ", PARAGRAPHS, 12, ["{Meta>}{ArrowUp}{/Meta}"]],
@@ -127,12 +199,24 @@ const cases: [name: string, value: string, start: number, keys: string[]][] = [
  * - Alt + 左右 (単語) … Blink は CJK を 1 文字ずつ刻む。Intl.Segmenter の方が日本語に合う
  */
 
-describe("Blink の textarea と突き合わせる", () => {
-  it.each(cases)("%s", async (_name, value, start, keys) => {
-    const base = await traceNative(value, start, keys);
-    const canvas = await traceOurs(CanvasTextarea, value, start, keys);
-    const dom = await traceOurs(DomTextarea, value, start, keys);
+// WebKit の textarea は縦書きの上下で別の答えを出す。
+// ここで測りたいのは Blink なので、隣に並べる相手が Blink のときだけ回す
+async function expectSameAsNative(value: string, start: number, keys: string[]) {
+  const base = await traceNative(value, start, keys);
+  const canvas = await traceOurs(CanvasTextarea, value, start, keys);
+  const dom = await traceOurs(DomTextarea, value, start, keys);
 
-    expect([...diff("canvas", base, canvas), ...diff("dom", base, dom)]).toEqual([]);
+  expect([...diff("canvas", base, canvas), ...diff("dom", base, dom)]).toEqual([]);
+}
+
+describe.runIf(server.browser === "chromium")("Blink の textarea と突き合わせる", () => {
+  it.each(cases)("%s", async (_name, value, start, keys) => {
+    await expectSameAsNative(value, start, keys);
+  });
+
+  describe.runIf(server.platform === "darwin")("macOS の割り当て", () => {
+    it.each(macCases)("%s", async (_name, value, start, keys) => {
+      await expectSameAsNative(value, start, keys);
+    });
   });
 });

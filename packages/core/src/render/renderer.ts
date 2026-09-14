@@ -7,6 +7,9 @@ import type { Caret } from "../model/movement";
 import { isSmallKana } from "../text/char-class";
 import type { ResolvedOptions } from "../types";
 
+/** ネイティブの textarea と同じで、字の大きさには比例しない (CSS px) */
+const CARET_WIDTH = 1;
+
 export interface RenderState {
   layout: Layout;
   geometry: Geometry;
@@ -152,13 +155,13 @@ export class Renderer {
     if (!caret) return;
     const { geometry, layout } = state;
     const rect: Rect = caretGeometry(layout, geometry, caret.offset, caret.preferEnd);
-    const thickness = Math.max(1, Math.round(geometry.em / 14));
 
     this.ctx.fillStyle = this.options.theme.caret;
+    // 境界の上に中心を置く。ネイティブも caret_left -= caret_width / 2 している
     if (isVertical(geometry)) {
-      this.ctx.fillRect(rect.x, rect.y - thickness / 2, rect.width, thickness);
+      this.ctx.fillRect(rect.x, rect.y - CARET_WIDTH / 2, rect.width, CARET_WIDTH);
     } else {
-      this.ctx.fillRect(rect.x - thickness / 2, rect.y, thickness, rect.height);
+      this.ctx.fillRect(rect.x - CARET_WIDTH / 2, rect.y, CARET_WIDTH, rect.height);
     }
   }
 }
