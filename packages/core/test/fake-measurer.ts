@@ -1,5 +1,5 @@
-import type { Measurer } from "../src/layout/measure";
-import type { Orientation } from "../src/text/char-class";
+import type { Orientation } from "../src/canvas/char-class";
+import type { Measurer } from "../src/canvas/measure";
 
 /**
  * 実フォントを使わずにレイアウトを回すための計測器。

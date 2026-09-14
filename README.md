@@ -130,7 +130,9 @@ UAX #50 (Unicode Vertical Text Layout) の分類を、canvas で再現できる 
 
 **矢印は画面で見た向きのまま動く。** 縦書きは字が下へ並んで行が左へ重なるので、
 字送りが `↑` `↓`、行送りが `←` `→` になる (横書きはその逆)。
-ネイティブの `<textarea>` は縦書きでも `←` `→` が字送りのままで、**そこだけ合わせていない。**
+これは Linux / Windows の `<textarea>` と同じ割り当て。
+macOS だけは矢印が OS のキーバインドから来るため、縦書きでも `←` `→` が字送りのままで、
+**そこだけ合わせていない。**
 着く先は合わせてあり、縦書きの textarea を隣に置いて同じ意味のキーを打ち、offset を突き合わせている
 ([native.test.ts](packages/core/test/browser/native.test.ts))。
 

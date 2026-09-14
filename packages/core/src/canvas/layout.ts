@@ -1,12 +1,12 @@
+import { type Grapheme, segmentGraphemes } from "../text/segment";
+import type { WritingMode } from "../types";
 import {
   isLatinWordChar,
   isLineEndForbidden,
   isLineStartForbidden,
   type Orientation,
   orientationOf,
-} from "../text/char-class";
-import { type Grapheme, segmentGraphemes } from "../text/segment";
-import type { WritingMode } from "../types";
+} from "./char-class";
 import type { Measurer } from "./measure";
 
 export interface PlacedChar {
