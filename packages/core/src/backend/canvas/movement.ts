@@ -1,4 +1,4 @@
-import type { Caret, Goal } from "../model/movement";
+import type { Caret, Goal } from "../../model/movement";
 import { lineIndexOfOffset, offsetAtLineDistance, offsetInLine } from "./geometry";
 import type { Layout } from "./layout";
 

@@ -1,15 +1,22 @@
-import type { Backend, BackendFactory, CaretRect, CompositionRange, ViewState } from "./backend";
+import type {
+  Backend,
+  BackendFactory,
+  CaretRect,
+  CompositionRange,
+  ViewState,
+} from "./backend/backend";
 import { HiddenInput } from "./input/hidden-input";
+import { type Command, commandFor, strokeOf } from "./input/keymap";
+import { PointerGestures } from "./input/pointer";
+import { normalize, TextDocument } from "./model/document";
 import type { EditKind } from "./model/history";
-import { History } from "./model/history";
 import { type Caret, type Goal, moveInline } from "./model/movement";
-import { stepGrapheme, stepWord } from "./text/segment";
+import { stepWord } from "./text/segment";
 import {
   type ResolvedOptions,
   resolveOptions,
   type Selection,
   type TextareaOptions,
-  type WritingMode,
 } from "./types";
 
 interface Composition {
@@ -36,21 +43,36 @@ export class Textarea {
 
   protected backend: Backend;
   private input: HiddenInput;
-  private history = new History();
+  private doc: TextDocument;
   private options: ResolvedOptions;
   private callbacks: TextareaOptions;
 
-  private text = "";
-  private anchor = 0;
-  private caret: Caret = { offset: 0, preferEnd: false };
-  private goal: Goal = null;
   private composition: Composition | null = null;
+
+  // 本文と選択は doc が持つ。ここからは読むだけ
+  private get text(): string {
+    return this.doc.text;
+  }
+
+  private get caret(): Caret {
+    return this.doc.caret;
+  }
+
+  private get goal(): Goal {
+    return this.doc.goal;
+  }
+
+  private get anchor(): number {
+    return this.doc.selection.anchor;
+  }
 
   private focused = false;
   private caretOn = true;
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
-  private dragging = false;
+  private pointer: PointerGestures;
   private destroyed = false;
+  /** className で足したぶん。差し替えと後片付けのために覚えておく */
+  private ownClasses: string[] = [];
   private disposers: (() => void)[] = [];
 
   constructor(container: HTMLElement, options: TextareaOptions, createBackend: BackendFactory) {
@@ -62,6 +84,8 @@ export class Textarea {
       container.style.position = "relative";
     }
     container.style.overflow = "hidden";
+    // 器の寸法を読むのは backend なので、作る前に当てておく
+    this.applyClassName(this.options.className);
 
     this.backend = createBackend(container, this.options);
 
@@ -80,17 +104,24 @@ export class Textarea {
     this.input.setReadOnly(this.options.readOnly);
     this.input.setDisabled(this.options.disabled);
 
-    this.bindPointer();
+    this.pointer = new PointerGestures(this.backend.surface, this.backend, this.backend, {
+      disabled: () => this.options.disabled,
+      placeCaret: (caret, extend) => this.moveCaret(caret, extend),
+      selectWord: (offset) => this.selectWord(offset),
+      selectParagraph: (offset) => this.selectParagraph(offset),
+      focus: () => this.input.focus(),
+    });
+    this.observeResize();
 
     // textarea と同じで、初期のキャレットは文頭に置く
-    this.text = normalize(options.value ?? "");
+    this.doc = new TextDocument(options.value ?? "");
     this.sync();
   }
 
   // ---- 公開 API ----
 
   get value(): string {
-    return this.text;
+    return this.doc.text;
   }
 
   set value(value: string) {
@@ -98,24 +129,15 @@ export class Textarea {
   }
 
   setValue(value: string, options: SetValueOptions = {}): void {
-    const next = normalize(value);
-    if (next === this.text && !options.selection) return;
-    if (!options.keepHistory) this.history.clear();
-
-    this.text = next;
-    const selection = options.selection ?? { anchor: this.anchor, focus: this.caret.offset };
-    this.anchor = clamp(selection.anchor, 0, next.length);
-    this.caret = { offset: clamp(selection.focus, 0, next.length), preferEnd: false };
-    this.goal = null;
+    if (!this.doc.reset(value, options.selection, options.keepHistory)) return;
     this.composition = null;
-
     this.sync();
-    if (options.notify) this.callbacks.onChange?.(this.text);
+    if (options.notify) this.callbacks.onChange?.(this.doc.text);
     this.callbacks.onSelectionChange?.(this.selection);
   }
 
   get selection(): Selection {
-    return { anchor: this.anchor, focus: this.caret.offset };
+    return this.doc.selection;
   }
 
   set selection(selection: Selection) {
@@ -123,20 +145,17 @@ export class Textarea {
   }
 
   setSelection(anchor: number, focus = anchor): void {
-    this.anchor = clamp(anchor, 0, this.text.length);
-    this.caret = { offset: clamp(focus, 0, this.text.length), preferEnd: false };
-    this.goal = null;
-    this.history.breakCoalescing();
+    this.doc.setSelection(anchor, focus);
     this.afterSelectionChange();
   }
 
   selectAll(): void {
-    this.setSelection(0, this.text.length);
+    this.doc.selectAll();
+    this.afterSelectionChange();
   }
 
   get selectedText(): string {
-    const [from, to] = this.range();
-    return this.text.slice(from, to);
+    return this.doc.selectedText;
   }
 
   insertText(text: string): void {
@@ -152,26 +171,29 @@ export class Textarea {
   }
 
   undo(): void {
-    const snapshot = this.history.undo({ text: this.text, selection: this.selection });
-    if (snapshot) this.applySnapshot(snapshot);
+    if (!this.doc.undo()) return;
+    this.composition = null;
+    this.afterEdit();
   }
 
   redo(): void {
-    const snapshot = this.history.redo({ text: this.text, selection: this.selection });
-    if (snapshot) this.applySnapshot(snapshot);
+    if (!this.doc.redo()) return;
+    this.composition = null;
+    this.afterEdit();
   }
 
   get canUndo(): boolean {
-    return this.history.canUndo;
+    return this.doc.canUndo;
   }
 
   get canRedo(): boolean {
-    return this.history.canRedo;
+    return this.doc.canRedo;
   }
 
   setOptions(options: TextareaOptions): void {
     this.callbacks = { ...this.callbacks, ...options };
     this.options = resolveOptions(this.callbacks);
+    this.applyClassName(this.options.className);
     this.backend.setOptions(this.options);
     this.input.setReadOnly(this.options.readOnly);
     this.input.setDisabled(this.options.disabled);
@@ -204,8 +226,20 @@ export class Textarea {
     this.stopBlink();
     for (const dispose of this.disposers) dispose();
     this.disposers.length = 0;
+    this.pointer.destroy();
     this.input.destroy();
     this.backend.destroy();
+    this.applyClassName("");
+  }
+
+  /** 自分で足したぶんだけ外して、新しいぶんを足す。元から付いていたものは触らない */
+  private applyClassName(className: string): void {
+    const next = className.split(/\s+/).filter(Boolean);
+    for (const name of this.ownClasses) {
+      if (!next.includes(name)) this.container.classList.remove(name);
+    }
+    for (const name of next) this.container.classList.add(name);
+    this.ownClasses = next;
   }
 
   // ---- 入力 ----
@@ -231,7 +265,7 @@ export class Textarea {
     if (this.options.readOnly || this.options.disabled) return;
     const [from, to] = this.range();
     if (from !== to) this.replace(from, to, "", "delete");
-    this.history.breakCoalescing();
+    this.doc.breakCoalescing();
     this.composition = { start: this.caret.offset, text: "", activeStart: 0, activeEnd: 0 };
     this.sync();
   }
@@ -252,154 +286,90 @@ export class Textarea {
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (this.options.disabled) return;
-    const accel = event.metaKey || event.ctrlKey;
-    const shift = event.shiftKey;
-    const word = event.altKey;
+    const command = commandFor(strokeOf(event), this.options.writingMode);
+    if (!command) return;
+    event.preventDefault();
+    this.run(command);
+  }
 
-    const arrow = arrowOf(event.key, this.options.writingMode);
-    if (arrow) {
-      event.preventDefault();
-      this.moveArrow(arrow.axis, arrow.direction, { accel, shift, word });
-      return;
-    }
-
-    switch (event.key) {
-      // Blink は縦書きだと何もしないが、使えないままにする理由が無い
-      case "Home":
-        event.preventDefault();
-        this.moveCaret(this.backend.lineEdge(this.caret, "start"), shift);
-        return;
-      case "End":
-        event.preventDefault();
-        this.moveCaret(this.backend.lineEdge(this.caret, "end"), shift);
-        return;
-      case "PageDown":
-      case "PageUp": {
-        event.preventDefault();
-        const result = this.movePage(event.key === "PageDown" ? 1 : -1);
-        this.moveCaret(result.caret, shift, result.goal);
-        return;
-      }
-      case "Backspace":
-        event.preventDefault();
-        this.deleteBy(-1, word);
-        return;
-      case "Delete":
-        event.preventDefault();
-        this.deleteBy(1, word);
-        return;
-      case "Enter":
-        event.preventDefault();
-        this.handleInsert("\n");
-        return;
-      case "Escape":
-        return;
-      default:
+  /** キーの割り当ては keymap.ts。ここは動かし方だけ持つ */
+  private run(command: Command): void {
+    switch (command.type) {
+      case "stepInline":
+        this.stepInline(command.direction, command.word, command.extend);
         break;
-    }
-
-    if (accel && event.key.toLowerCase() === "a") {
-      event.preventDefault();
-      this.selectAll();
-      return;
-    }
-    if (accel && event.key.toLowerCase() === "z") {
-      event.preventDefault();
-      if (shift) this.redo();
-      else this.undo();
-      return;
-    }
-    if (accel && event.key.toLowerCase() === "y") {
-      event.preventDefault();
-      this.redo();
+      case "lineEdge":
+        this.moveCaret(this.backend.lineEdge(this.caret, command.edge), command.extend);
+        break;
+      case "docEdge": {
+        const caret: Caret =
+          command.edge === "end"
+            ? { offset: this.text.length, preferEnd: true }
+            : { offset: 0, preferEnd: false };
+        this.moveCaret(caret, command.extend);
+        break;
+      }
+      case "paragraphEdge":
+        this.moveCaret(this.paragraphEdge(command.direction), command.extend);
+        break;
+      case "moveAcross":
+        this.moveAcross(command.direction, command.extend);
+        break;
+      case "page": {
+        const result = this.movePage(command.direction);
+        this.moveCaret(result.caret, command.extend, result.goal);
+        break;
+      }
+      case "delete":
+        this.deleteBy(command.direction, command.word);
+        break;
+      case "insert":
+        this.handleInsert(command.text);
+        break;
+      case "selectAll":
+        this.selectAll();
+        break;
+      case "undo":
+        this.undo();
+        break;
+      case "redo":
+        this.redo();
+        break;
     }
   }
 
   private deleteBy(direction: 1 | -1, byWord: boolean): void {
     if (this.options.readOnly || this.options.disabled) return;
-    const [from, to] = this.range();
-    if (from !== to) {
-      this.replace(from, to, "", "delete");
-      return;
-    }
-    const at = this.caret.offset;
-    const other = byWord
-      ? stepWord(this.text, at, direction)
-      : stepGrapheme(this.text, at, direction);
-    if (other === at) return;
-    this.replace(Math.min(at, other), Math.max(at, other), "", "delete");
+    if (!this.doc.deleteBy(direction, byWord, this.options.maxLength)) return;
+    this.resetBlink();
+    this.afterEdit();
   }
 
   private replace(from: number, to: number, insert: string, kind: EditKind): void {
-    const room = this.options.maxLength - (this.text.length - (to - from));
-    const text = room >= insert.length ? insert : insert.slice(0, Math.max(0, room));
-    if (from === to && text.length === 0) return;
-
-    this.history.push({ text: this.text, selection: this.selection }, kind);
-    this.text = this.text.slice(0, from) + text + this.text.slice(to);
-
-    const at = from + text.length;
-    this.anchor = at;
-    this.caret = { offset: at, preferEnd: false };
-    this.goal = null;
-
+    if (!this.doc.replace(from, to, insert, kind, this.options.maxLength)) return;
     this.resetBlink();
-    this.sync();
-    this.callbacks.onChange?.(this.text);
-    this.callbacks.onSelectionChange?.(this.selection);
+    this.afterEdit();
   }
 
-  private applySnapshot(snapshot: { text: string; selection: Selection }): void {
-    this.text = snapshot.text;
-    this.anchor = clamp(snapshot.selection.anchor, 0, this.text.length);
-    this.caret = { offset: clamp(snapshot.selection.focus, 0, this.text.length), preferEnd: false };
-    this.goal = null;
-    this.composition = null;
+  /** 本文が動いたあとの後始末 */
+  private afterEdit(): void {
     this.sync();
-    this.callbacks.onChange?.(this.text);
+    this.callbacks.onChange?.(this.doc.text);
     this.callbacks.onSelectionChange?.(this.selection);
   }
 
   // ---- 選択 ----
 
   private range(): [number, number] {
-    const a = this.anchor;
-    const b = this.caret.offset;
-    return a <= b ? [a, b] : [b, a];
+    return this.doc.range();
   }
 
   private moveCaret(caret: Caret, extend: boolean, goal: Goal = null): void {
-    this.caret = caret;
-    this.goal = goal;
-    if (!extend) this.anchor = caret.offset;
-    this.history.breakCoalescing();
+    this.doc.moveCaret(caret, extend, goal);
     this.afterSelectionChange();
   }
 
   /** 矢印ひとつぶんの移動。軸が決まれば、刻みは修飾キーで決まる */
-  private moveArrow(
-    axis: Axis,
-    direction: 1 | -1,
-    mods: { accel: boolean; shift: boolean; word: boolean },
-  ): void {
-    const { accel, shift, word } = mods;
-
-    if (axis === "inline") {
-      if (accel) this.moveCaret(this.backend.lineEdge(this.caret, edgeOf(direction)), shift);
-      else this.stepInline(direction, word, shift);
-      return;
-    }
-
-    if (accel) {
-      const caret =
-        direction === 1
-          ? { offset: this.text.length, preferEnd: true }
-          : { offset: 0, preferEnd: false };
-      this.moveCaret(caret, shift);
-    } else if (word) this.moveCaret(this.paragraphEdge(direction), shift);
-    else this.moveAcross(direction, shift);
-  }
-
   /**
    * 行の中を 1 つ動く。縦書きでは下 / 上。
    * 選んでいるときの 1 文字ぶんは、選んだ端に畳むだけで進まない (Blink も同じ)。
@@ -454,72 +424,6 @@ export class Textarea {
   }
 
   // ---- ポインタ ----
-
-  private bindPointer(): void {
-    const surface = this.backend.surface;
-    const on = <K extends keyof HTMLElementEventMap>(
-      type: K,
-      listener: (event: HTMLElementEventMap[K]) => void,
-      options?: AddEventListenerOptions,
-    ) => {
-      surface.addEventListener(type, listener as EventListener, options);
-      this.disposers.push(() =>
-        surface.removeEventListener(type, listener as EventListener, options),
-      );
-    };
-
-    // WebKit は pointerdown の preventDefault では合成マウスイベントを止めない。
-    // touchend の後に届く mousedown が surface (div) にフォーカスを移そうとして、
-    // 入れたばかりの hidden input から焦点を奪う
-    on("mousedown", (event) => event.preventDefault());
-
-    on("pointerdown", (event) => {
-      if (event.button !== 0 || this.options.disabled) return;
-      event.preventDefault();
-      // 先に測る。focus するとキャレットを見せるために送りが動き、
-      // 目に見えていた位置とずれる
-      const hit = this.backend.hitTest(event.clientX, event.clientY);
-      this.input.focus();
-      if (event.detail >= 3) {
-        this.selectParagraph(hit.offset);
-        return;
-      }
-      if (event.detail === 2) {
-        this.selectWord(hit.offset);
-        return;
-      }
-
-      // 指はスワイプでスクロールさせたい。ブラウザがパンと決める前に
-      // ドラッグ選択へ入ると、決まるまでの数 px ぶんが選ばれて残る。
-      // ポインタを捕らえるとパン自体を邪魔するので、どちらもしない
-      if (event.pointerType !== "touch") {
-        this.dragging = true;
-        surface.setPointerCapture(event.pointerId);
-      }
-      this.caret = hit;
-      if (!event.shiftKey) this.anchor = hit.offset;
-      this.goal = null;
-      this.history.breakCoalescing();
-      this.afterSelectionChange();
-    });
-
-    on("pointermove", (event) => {
-      if (!this.dragging) return;
-      this.caret = this.backend.hitTest(event.clientX, event.clientY);
-      this.goal = null;
-      this.afterSelectionChange();
-    });
-
-    const stop = (event: PointerEvent) => {
-      if (!this.dragging) return;
-      this.dragging = false;
-      if (surface.hasPointerCapture(event.pointerId)) {
-        surface.releasePointerCapture(event.pointerId);
-      }
-    };
-    on("pointerup", stop);
-    on("pointercancel", stop);
-  }
 
   private selectWord(offset: number): void {
     const from = stepWord(this.text, Math.min(offset + 1, this.text.length), -1);
@@ -580,18 +484,50 @@ export class Textarea {
   }
 
   /** 組み直して、キャレットを見える位置に置く */
+  /**
+   * CSS を読み直して組み直す。
+   * 字の大きさ・余白・禁則を CSS で変えたら呼ぶ。
+   * 器の寸法だけなら ResizeObserver が拾うので要らない。
+   */
+  refresh(): void {
+    this.backend.refresh();
+    this.sync();
+  }
+
   protected sync(): void {
     if (this.destroyed) return;
     const caret = this.displayCaret();
     this.backend.update(this.viewState());
     this.backend.ensureVisible(caret);
+    // 送りが落ち着いたいま、キャレットが画面のどこに居るかを控える。
+    // 次の組み直しで、そこへ戻す
+    this.backend.anchorCaret();
 
-    // IME の候補ウィンドウをキャレットの隣に出させる
+    this.placeInput();
+  }
+
+  /** IME の候補ウィンドウをキャレットの隣に出させる */
+  private placeInput(): void {
     this.input.moveTo(
-      this.backend.caretRect(caret),
+      this.backend.caretRect(this.displayCaret()),
       this.options.writingMode,
-      this.options.font.size,
+      this.backend.fontSize,
     );
+  }
+
+  /**
+   * 器が変われば組み直る。隠し入力もキャレットの脇へ置き直す。
+   * 置いたままだと、キーボードで器が縮んだときに入力がその下へ取り残され、
+   * iOS が開いた直後にキーボードを閉じてしまう。
+   * backend より後に登録する。組み直った結果を見てから動かしたい
+   */
+  private observeResize(): void {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!this.destroyed && this.focused) this.placeInput();
+    });
+    observer.observe(this.container);
+    this.disposers.push(() => observer.disconnect());
   }
 
   private handleFocus(): void {
@@ -603,9 +539,9 @@ export class Textarea {
 
   private handleBlur(): void {
     this.focused = false;
-    this.dragging = false;
+    this.pointer.cancelDrag();
     this.stopBlink();
-    this.history.breakCoalescing();
+    this.doc.breakCoalescing();
     this.sync();
     this.callbacks.onBlur?.();
   }
@@ -633,38 +569,3 @@ export class Textarea {
 }
 
 /** 改行を \n に揃える。textarea もクリップボードも \r\n を投げてくる */
-/** 字の並ぶ向き (inline) か、行の重なる向き (block) か */
-type Axis = "inline" | "block";
-
-/**
- * 矢印キーを、画面で見た向きのまま軸に割り当てる。
- * 縦書きは字が下へ並び行が左へ重なるので、字送りが ↑↓・行送りが ←→ になる。
- * (ネイティブの textarea は縦書きでも ←→ が字送りのままで、そこだけ合わせていない)
- */
-function arrowOf(key: string, writingMode: WritingMode): { axis: Axis; direction: 1 | -1 } | null {
-  const vertical = writingMode === "vertical-rl";
-  switch (key) {
-    case "ArrowDown":
-      return vertical ? { axis: "inline", direction: 1 } : { axis: "block", direction: 1 };
-    case "ArrowUp":
-      return vertical ? { axis: "inline", direction: -1 } : { axis: "block", direction: -1 };
-    case "ArrowLeft":
-      return vertical ? { axis: "block", direction: 1 } : { axis: "inline", direction: -1 };
-    case "ArrowRight":
-      return vertical ? { axis: "block", direction: -1 } : { axis: "inline", direction: 1 };
-    default:
-      return null;
-  }
-}
-
-function edgeOf(direction: 1 | -1): "start" | "end" {
-  return direction === 1 ? "end" : "start";
-}
-
-function normalize(text: string): string {
-  return text.replace(/\r\n?/g, "\n");
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return value < min ? min : value > max ? max : value;
-}

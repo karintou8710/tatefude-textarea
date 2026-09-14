@@ -1,5 +1,5 @@
-import { Textarea } from "../textarea";
-import type { TextareaOptions } from "../types";
+import { Textarea } from "../../textarea";
+import type { TextareaOptions } from "../../types";
 import { DomBackend } from "./backend";
 
 export class DomTextarea extends Textarea {

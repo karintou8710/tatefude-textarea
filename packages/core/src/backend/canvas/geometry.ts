@@ -1,5 +1,6 @@
-import type { Padding, WritingMode } from "../types";
+import type { WritingMode } from "../../types";
 import type { Layout, LayoutLine } from "./layout";
+import type { Padding } from "./style";
 
 export interface Geometry {
   writingMode: WritingMode;
@@ -11,6 +12,8 @@ export interface Geometry {
   lineHeight: number;
   /** 全角 1 文字の送り量 */
   em: number;
+  /** 字が入っている箱の、行を横切る向きの長さ (ascent + descent)。行送りは含まない */
+  textBox: number;
   /** 行送り (block) 方向に送った量 */
   scroll: number;
 }
@@ -110,8 +113,9 @@ export function offsetInLine(line: LayoutLine, offset: number): number {
 
 /**
  * キャレットの矩形。Range の潰れた矩形と同じで、送り方向の厚みは持たない。
- * 行を横切る向きには行ボックス全体を占める。ネイティブの textarea がそうなっている
- * (Blink: caret_rect.cc の ComputeLocalCaretRect が行ボックスまで広げる)。
+ * 行を横切る向きの長さは字が入っている箱ぶん (ascent + descent) で、行送りは含めない。
+ * 行の真ん中に置く。
+ * (Blink も caret_rect.cc で字の箱の大きさを使う。行ボックスは位置を収めるためだけ)
  */
 export function caretGeometry(
   layout: Layout,
@@ -126,13 +130,16 @@ export function caretGeometry(
 }
 
 /** 行ボックス全体を横切る、inline 方向に length の矩形 */
+/** 行の真ん中に、行を横切る向きへ字の箱ぶんだけ伸ばした矩形 */
 function lineSpanRect(geo: Geometry, index: number, inline: number, length: number): Rect {
   const { x, y } = toPhysical(geo, index, inline);
+  // 行送りと字の箱の差は、行の両側に半分ずつ空く
+  const margin = (geo.lineHeight - geo.textBox) / 2;
   if (isVertical(geo)) {
     // toPhysical は行の block 側の端を返す。縦書きなら列の右端
-    return { x: x - geo.lineHeight, y, width: geo.lineHeight, height: length };
+    return { x: x - geo.lineHeight + margin, y, width: geo.textBox, height: length };
   }
-  return { x, y, width: length, height: geo.lineHeight };
+  return { x, y: y + margin, width: length, height: geo.textBox };
 }
 
 export function selectionRects(layout: Layout, geo: Geometry, from: number, to: number): Rect[] {

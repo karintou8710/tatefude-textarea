@@ -4,7 +4,7 @@ import {
   isLineStartForbidden,
   isSmallKana,
   orientationOf,
-} from "../../src/canvas/char-class";
+} from "../../src/backend/canvas/char-class";
 
 describe("orientationOf", () => {
   it("漢字と仮名は正立する", () => {

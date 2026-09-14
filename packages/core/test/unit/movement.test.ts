@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { contentLength, type Geometry } from "../../src/canvas/geometry";
-import { layoutText } from "../../src/canvas/layout";
-import { moveAcrossLines, movePage, moveToLineEdge } from "../../src/canvas/movement";
+import { contentLength, type Geometry } from "../../src/backend/canvas/geometry";
+import { layoutText } from "../../src/backend/canvas/layout";
+import { moveAcrossLines, movePage, moveToLineEdge } from "../../src/backend/canvas/movement";
 import { moveInline } from "../../src/model/movement";
 import { fakeMeasurer } from "../fake-measurer";
 
@@ -13,6 +13,8 @@ const geometry: Geometry = {
   padding: { top: 10, right: 10, bottom: 10, left: 10 },
   lineHeight: 18,
   em,
+  // 字の箱は em より少し大きい。キャレットの長さがこれに従うことを見る
+  textBox: 12,
   scroll: 0,
 };
 

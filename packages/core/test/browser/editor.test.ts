@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/canvas/index";
-import { DomTextarea } from "../../src/dom/index";
+import { CanvasTextarea } from "../../src/backend/canvas/index";
+import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
+import { DomTextarea } from "../../src/backend/dom/index";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions, WritingMode } from "../../src/types";
+import { applyStyle, canvasStyle, type TestStyle } from "./style";
 
-type Ctor = new (container: HTMLElement, options?: TextareaOptions) => Textarea;
+type Ctor = new (
+  container: HTMLElement,
+  options?: TextareaOptions,
+  style?: CanvasStyleOptions,
+) => Textarea;
+
+const STYLE = { size: 20, lineHeight: 1.8, padding: 10 };
 
 // 2 つのバックエンド × 縦横。キー操作は論理なので、どれでも同じ振る舞いになる
 const backends: [name: string, ctor: Ctor, writingMode: WritingMode][] = [
@@ -30,18 +38,17 @@ function arrows() {
     : { nextChar: "ArrowRight", prevChar: "ArrowLeft", nextLine: "ArrowDown", prevLine: "ArrowUp" };
 }
 
-function setup(options: TextareaOptions = {}) {
+function setup(options: TextareaOptions = {}, style: TestStyle = STYLE) {
   const container = document.createElement("div");
   Object.assign(container.style, { width: "300px", height: "200px" });
+  applyStyle(container, style);
   document.body.appendChild(container);
 
-  const editor = new Editor(container, {
-    writingMode,
-    font: { size: 20, lineHeight: 1.8 },
-    padding: 10,
-    caretBlinkInterval: 0,
-    ...options,
-  });
+  const editor = new Editor(
+    container,
+    { writingMode, caretBlinkInterval: 0, ...options },
+    canvasStyle(style),
+  );
   const textarea = container.querySelector("textarea");
   if (!textarea) throw new Error("hidden textarea が無い");
 
@@ -50,6 +57,31 @@ function setup(options: TextareaOptions = {}) {
     container.remove();
   });
   return { container, editor, textarea };
+}
+
+function pointer(
+  container: HTMLElement,
+  kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  init: PointerEventInit = {},
+) {
+  const surface = container.firstElementChild as HTMLElement;
+  surface.dispatchEvent(
+    new PointerEvent(kind, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      pointerId: 1,
+      isPrimary: true,
+      pointerType: "touch",
+      ...init,
+    }),
+  );
+}
+
+/** container の真ん中あたり */
+function middle(container: HTMLElement) {
+  const box = container.getBoundingClientRect();
+  return { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
 }
 
 function type(textarea: HTMLTextAreaElement, text: string) {
@@ -290,6 +322,42 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.selection.focus).toBe(2);
     });
 
+    it.runIf(ctor === DomTextarea)("ブラウザが行送りを丸めても本文からずれない", () => {
+      // Safari は line-height の端数を整数に丸める (17 x 1.8 = 30.6 → 30)。
+      // 行送りを決め打つと、行番号に比例してキャレットが字から離れていく
+      const { container, editor } = setup(
+        { value: "あ".repeat(400) },
+        { size: 17, lineHeight: 1.8, padding: 10, family: "serif" },
+      );
+      const layer = (container.firstElementChild as HTMLElement).children[1] as HTMLElement;
+      const content = [...layer.children].find((el) =>
+        el.textContent?.startsWith("あ"),
+      ) as HTMLElement;
+      // 丸めるエンジンと同じ状況を作って、組み直させる
+      content.style.setProperty("line-height", "30px", "important");
+      editor.setValue(`${"あ".repeat(400)}い`);
+
+      // 遠い行で、字とキャレットを比べる
+      const node = content.firstChild as Text;
+      const offset = 200;
+      editor.setSelection(offset);
+
+      const range = document.createRange();
+      range.setStart(node, offset);
+      range.setEnd(node, offset + 1);
+      const glyph = range.getBoundingClientRect();
+      const surface = (container.firstElementChild as HTMLElement).getBoundingClientRect();
+      const caret = editor.caretRect;
+
+      // 行を横切る軸で比べる。縦書きなら x、横書きなら y
+      const vertical = mode === "vertical-rl";
+      const glyphCenter = vertical ? glyph.x + glyph.width / 2 : glyph.y + glyph.height / 2;
+      const caretCenter = vertical
+        ? surface.x + caret.x + caret.width / 2
+        : surface.y + caret.y + caret.height / 2;
+      expect(Math.abs(caretCenter - glyphCenter)).toBeLessThan(1);
+    });
+
     it("器が縮んでもキャレットを見失わない", async () => {
       // スマホでキーボードが出ると器が縮む。縦書きなら行の長さごと変わって全部組み直る
       const { container, editor } = setup({ value: "あ".repeat(400) });
@@ -404,6 +472,230 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     });
   });
 
+  describe("指で触る", () => {
+    it("なぞっただけならキーボードを開かない", () => {
+      const { container, textarea } = setup({ value: "あ".repeat(400) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      // 指を置いただけでは、叩いたのかスクロールなのかまだ決まらない
+      expect(document.activeElement).not.toBe(textarea);
+
+      pointer(container, "pointermove", { clientX: at.clientX - 60, clientY: at.clientY });
+      pointer(container, "pointerup", { clientX: at.clientX - 60, clientY: at.clientY });
+      expect(document.activeElement).not.toBe(textarea);
+    });
+
+    it("軽く叩いたらそこにキャレットが来る", () => {
+      const { container, editor, textarea } = setup({ value: "あ".repeat(400) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      expect(document.activeElement).toBe(textarea);
+      expect(editor.selection.focus).toBeGreaterThan(0);
+    });
+
+    it("ブラウザがスクロールを取ったら叩いた扱いにしない", () => {
+      const { container, textarea } = setup({ value: "あ".repeat(400) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      // パンを始めたブラウザは pointercancel を投げてくる
+      pointer(container, "pointercancel", at);
+      pointer(container, "pointerup", at);
+      expect(document.activeElement).not.toBe(textarea);
+    });
+
+    it("マウスは押した時点で掴む", () => {
+      const { container, editor, textarea } = setup({ value: "あ".repeat(400) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", { ...at, pointerType: "mouse" });
+      expect(document.activeElement).toBe(textarea);
+      expect(editor.selection.focus).toBeGreaterThan(0);
+    });
+
+    it("叩いた場所は器が縮んでも動かない", async () => {
+      // キーボードは何段階かに分けて出てくる。組み直るたびに、突いた行は画面の同じところに残す
+      const { container, editor } = setup({ value: "あ".repeat(2000) });
+      const vertical = writingMode === "vertical-rl";
+      // 先頭からずらしておく。送りが 0 のままだと戻す先が合っていなくても気づけない
+      editor.setSelection(600);
+      await nextFrames();
+
+      const at = middle(container);
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      const blockOfCaret = () => {
+        const rect = editor.caretRect;
+        return vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+      };
+      const before = blockOfCaret();
+
+      for (const size of ["160px", "120px"]) {
+        if (vertical) container.style.height = size;
+        else container.style.width = size;
+        await nextFrames();
+      }
+
+      expect(Math.abs(blockOfCaret() - before)).toBeLessThan(1);
+    });
+
+    it("なぞってから叩いても、指の下にキャレットが来る", async () => {
+      // 焦点の無いところを叩くと、焦点を入れた時点で「古いキャレットを見せる」送りが入る。
+      // なぞって古いキャレットを画面の外へ出しておくと、それに引きずられて別の列に着く
+      const { container, editor } = setup({ value: "あ".repeat(2000) });
+      const vertical = writingMode === "vertical-rl";
+      editor.focus();
+      editor.setSelection(200);
+      await nextFrames();
+      // キーボードを閉じた直後と同じ状態にして、指でなぞる
+      editor.blur();
+      editor.scrollOffset += 1500;
+      await nextFrames();
+
+      const box = container.getBoundingClientRect();
+      const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      // 指が乗っている行にキャレットが来る。ズレは行の中心までの半行ぶんに収まる
+      const rect = editor.caretRect;
+      const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+      const finger = vertical ? at.clientX - box.left : at.clientY - box.top;
+      expect(Math.abs(center - finger)).toBeLessThan(36 / 2 + 1);
+    });
+
+    it("器が縮んだら、隠し入力も中へ置き直す", async () => {
+      // iOS はキーボードの下に取り残された入力を見つけると、開いた直後に閉じてしまう
+      const { container, editor, textarea } = setup({ value: "あ".repeat(2000) });
+      editor.focus();
+      editor.setSelection(600);
+      await nextFrames();
+
+      // キーボードが出てくる側 (下端) の近くを叩く
+      const box = container.getBoundingClientRect();
+      const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height - 20 };
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      container.style.height = "120px";
+      await nextFrames();
+
+      const input = textarea.getBoundingClientRect();
+      const host = container.getBoundingClientRect();
+      const left = input.x - host.x;
+      const top = input.y - host.y;
+      expect(top).toBeGreaterThanOrEqual(0);
+      expect(top).toBeLessThanOrEqual(container.clientHeight - 1);
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(left).toBeLessThanOrEqual(container.clientWidth - 1);
+    });
+
+    it("キーボードを閉じた時も、列は動かない", async () => {
+      // 開く時と同じで、閉じる時も器が変わって全部組み直る。
+      // 焦点が外れたあとなので、戻す先を持っていないと読んでいた場所ごと飛ぶ
+      const { container, editor, textarea } = setup({ value: "あ".repeat(2000) });
+      const vertical = writingMode === "vertical-rl";
+      const blockOfCaret = () => {
+        const rect = editor.caretRect;
+        return vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+      };
+
+      editor.focus();
+      editor.setSelection(600);
+      await nextFrames();
+      const at = middle(container);
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      // キーボードが出て、そこで書く
+      if (vertical) container.style.height = "120px";
+      else container.style.width = "200px";
+      await nextFrames();
+      type(textarea, "あ");
+      await nextFrames();
+      const before = blockOfCaret();
+
+      // 閉じる。焦点が外れてから器が戻る
+      editor.blur();
+      if (vertical) container.style.height = "200px";
+      else container.style.width = "300px";
+      await nextFrames();
+
+      expect(Math.abs(blockOfCaret() - before)).toBeLessThan(1);
+    });
+
+    it("潰れる側を叩いても、キャレットは画面に残る", async () => {
+      // 器は行送り方向にも潰れる。潰れた側を叩いていると、戻す先がそのまま画面の外になる
+      const { container, editor } = setup({ value: "あ".repeat(2000) });
+      const vertical = writingMode === "vertical-rl";
+      editor.setSelection(600);
+      await nextFrames();
+
+      // 器が減る側 (縦書きなら右端、横書きなら下端) の近くを叩く
+      const box = container.getBoundingClientRect();
+      const at = vertical
+        ? { clientX: box.left + box.width - 20, clientY: box.top + box.height / 2 }
+        : { clientX: box.left + box.width / 2, clientY: box.top + box.height - 20 };
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      if (vertical) container.style.width = "150px";
+      else container.style.height = "120px";
+      await nextFrames();
+
+      const rect = editor.caretRect;
+      expect(vertical ? rect.x : rect.y).toBeGreaterThanOrEqual(0);
+      expect(vertical ? rect.x + rect.width : rect.y + rect.height).toBeLessThanOrEqual(
+        vertical ? container.clientWidth : container.clientHeight,
+      );
+    });
+
+    it.each([
+      ["ホイールで送ったら", "wheel"],
+      ["指でなぞったら", "pan"],
+    ])("%s、叩いた場所には戻さない", async (_name, how) => {
+      const { container, editor } = setup({ value: "あ".repeat(2000) });
+      const vertical = writingMode === "vertical-rl";
+      editor.setSelection(600);
+      await nextFrames();
+
+      const at = middle(container);
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+
+      // 自分で送った先が見たい位置。キャレットは画面の外へ出る
+      if (how === "wheel") {
+        const surface = container.firstElementChild as HTMLElement;
+        surface.dispatchEvent(
+          new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 2000 }),
+        );
+      } else {
+        // 指のパンはブラウザが送る。こちらに届くのは「叩かなかった」ことだけ
+        pointer(container, "pointerdown", at);
+        pointer(container, "pointermove", { clientX: at.clientX - 80, clientY: at.clientY - 80 });
+        pointer(container, "pointerup", { clientX: at.clientX - 80, clientY: at.clientY - 80 });
+        editor.scrollOffset += 2000;
+      }
+
+      if (vertical) container.style.height = "120px";
+      else container.style.width = "200px";
+      await nextFrames();
+
+      // 戻す約束は解けている。見えるところまで送るだけなので、キャレットは器の端の行に着く。
+      // 端に寄せるのは行ボックス (36px) なので、キャレットの中心は余白から半行ぶん内側
+      const rect = editor.caretRect;
+      const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+      const size = vertical ? container.clientWidth : container.clientHeight;
+      const edge = 10 + 36 / 2;
+      expect(Math.min(Math.abs(center - edge), Math.abs(size - edge - center))).toBeLessThan(1);
+    });
+  });
+
   describe("undo と redo", () => {
     it("打った文字をまとめて戻す", () => {
       const { editor, textarea } = setup();
@@ -509,11 +801,10 @@ describe("描画", () => {
   function mount(options: TextareaOptions = {}) {
     const container = document.createElement("div");
     Object.assign(container.style, { width: "300px", height: "200px" });
+    applyStyle(container, STYLE);
     document.body.appendChild(container);
     const editor = new DomTextarea(container, {
       writingMode: "vertical-rl",
-      font: { size: 20, lineHeight: 1.8 },
-      padding: 10,
       caretBlinkInterval: 0,
       ...options,
     });

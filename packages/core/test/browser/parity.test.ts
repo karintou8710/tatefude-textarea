@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/canvas/index";
-import { DomTextarea } from "../../src/dom/index";
+import { CanvasTextarea } from "../../src/backend/canvas/index";
+import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
+import { DomTextarea } from "../../src/backend/dom/index";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions } from "../../src/types";
+import { applyStyle, canvasStyle } from "./style";
 
 /**
  * 2 つのバックエンドが同じ操作で同じところに着くことを縛る。
@@ -24,16 +26,18 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-function mount(Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea, value: string) {
+function mount(
+  Ctor: new (host: HTMLElement, options: TextareaOptions, style?: CanvasStyleOptions) => Textarea,
+  value: string,
+  family?: string,
+  height = HEIGHT,
+) {
+  const style = { size: SIZE, lineHeight: LINE_HEIGHT, padding: PADDING, family };
   const host = document.createElement("div");
-  Object.assign(host.style, { width: `${WIDTH}px`, height: `${HEIGHT}px` });
+  Object.assign(host.style, { width: `${WIDTH}px`, height: `${height}px` });
+  applyStyle(host, style);
   document.body.appendChild(host);
-  const editor = new Ctor(host, {
-    value,
-    font: { size: SIZE, lineHeight: LINE_HEIGHT },
-    padding: PADDING,
-    caretBlinkInterval: 0,
-  });
+  const editor = new Ctor(host, { value, caretBlinkInterval: 0 }, canvasStyle(style));
   cleanups.push(() => {
     editor.destroy();
     host.remove();
@@ -41,8 +45,11 @@ function mount(Ctor: new (host: HTMLElement, options: TextareaOptions) => Textar
   return { host, editor, textarea: host.querySelector("textarea") as HTMLTextAreaElement };
 }
 
-function pair(value: string) {
-  return { canvas: mount(CanvasTextarea, value), dom: mount(DomTextarea, value) };
+function pair(value: string, family?: string, height?: number) {
+  return {
+    canvas: mount(CanvasTextarea, value, family, height),
+    dom: mount(DomTextarea, value, family, height),
+  };
 }
 
 interface Step {
@@ -223,6 +230,29 @@ describe("2 つのバックエンドが同じところに着く", () => {
     }
     expectSame([state(canvas.editor, "送ってから突く")], [state(dom.editor, "送ってから突く")]);
   });
+
+  /**
+   * 立てた字の縦の送りは 1em とは限らない。フォントに縦組みの寸法が無ければ
+   * ブラウザは ascent + descent から作る。canvas 側が 1em と決め打つと、
+   * 本文の長いところで折り返しが 1 行ずつずれていく。
+   * どのフォントが落ちてくるかは OS で変わるので、絶対値ではなく 2 実装の一致だけを見る。
+   */
+  it.each(["system-ui", "serif", "sans-serif", "monospace"])(
+    "縦の送りが 1em でない %s でも揃う",
+    (family) => {
+      // 行の長さを少しずつ変える。送りを 1em と決め打っていると、
+      // どこかで 1 行に入る字数がずれる
+      const counts = [190, 200, 210, 220, 230, 240].map((height) => {
+        const { canvas, dom } = pair(long, family, height);
+        return [`${height}: ${canvas.editor.lineCount}`, `${height}: ${dom.editor.lineCount}`];
+      });
+      expect(counts.map(([c]) => c)).toEqual(counts.map(([, d]) => d));
+
+      const { canvas, dom } = pair(long, family);
+      const keys = repeat(20, "ArrowLeft");
+      expectSame(drive(canvas, keys), drive(dom, keys));
+    },
+  );
 
   it("編集したあとも揃っている", () => {
     const cases: ((editor: Textarea) => void)[] = [

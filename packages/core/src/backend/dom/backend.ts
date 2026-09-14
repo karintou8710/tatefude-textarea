@@ -1,10 +1,25 @@
+import type { Caret, Goal } from "../../model/movement";
+import type { ResolvedOptions } from "../../types";
 import type { Backend, CaretRect, ViewState } from "../backend";
-import type { Caret, Goal } from "../model/movement";
-import { readScroll, writeScroll } from "../scroll";
-import type { ResolvedOptions } from "../types";
+import { fontBoxSize } from "../font-box";
+import * as axis from "./axis";
+import { DomScroller, type ScrollHost } from "./scroller";
 
 /** ネイティブの textarea と同じで、字の大きさには比例しない (CSS px) */
 const CARET_WIDTH = 1;
+
+/** 行送りを測るのに読む字数。数行ぶん見えれば足りる */
+const PITCH_SAMPLE = 400;
+
+/** container の計算スタイルから読んだ、組みに要る寸法 */
+interface Metrics {
+  /** font の短縮形。fontBoxSize に渡す */
+  css: string;
+  size: number;
+  /** 行送り (px)。measurePitch が測れなかったときの代用 */
+  lineHeight: number;
+  padding: { top: number; right: number; bottom: number; left: number };
+}
 
 /**
  * 組むのはブラウザに任せる。字の向き (UAX #50)・縦組み字形・禁則は
@@ -26,12 +41,17 @@ export class DomBackend implements Backend {
   private caretLayer: HTMLElement;
 
   private options: ResolvedOptions;
+  /** CSS から読んだ寸法。組み直すたびに読み直す */
+  private metrics: Metrics;
   private state: ViewState | null = null;
+  /** 測った行送り。組み直すたびに捨てる */
+  private pitch: number | null = null;
   /** content に流し込んだテキスト (末尾の番人を含む) */
   private rendered = "";
   /** テキストのオフセットと、それを持つ Text ノードの対応 */
   private nodes: { node: Text; start: number }[] = [];
 
+  private scroller: DomScroller;
   private frame = 0;
   private resizeObserver: ResizeObserver | null = null;
   private destroyed = false;
@@ -82,16 +102,37 @@ export class DomBackend implements Backend {
     this.surface.append(this.spacer, this.layer);
     container.appendChild(this.surface);
 
+    this.metrics = readMetrics(container);
+    this.scroller = new DomScroller(this.scrollHost());
     this.applyStyles();
-    this.syncMetrics();
-    this.bindWheel();
+    this.syncGeometry();
     this.observeResize();
   }
 
   setOptions(options: ResolvedOptions): void {
     this.options = options;
+    // writingMode や色は metrics に出ないので、同じでも当て直す
+    this.metrics = readMetrics(this.container);
     this.applyStyles();
-    this.syncMetrics();
+    this.syncGeometry();
+  }
+
+  /**
+   * 呼び手は「CSS が変わったかもしれない」としか分からないので、空振りが多い。
+   * React なら描画のたびに来る。
+   *
+   * 高いのは applyStyles で、行送りの実測を捨てるから次に測り直しになる。
+   * これは metrics に出る値が動いたときだけでいい。
+   * 組み上がりのほうは line-break のように metrics に出ない指定でも変わるので、
+   * 毎回合わせる。読むのは content の矩形 1 つで、行を測り直すのとは桁が違う。
+   */
+  refresh(): void {
+    const next = readMetrics(this.container);
+    if (!sameMetrics(this.metrics, next)) {
+      this.metrics = next;
+      this.applyStyles();
+    }
+    this.syncGeometry();
   }
 
   update(state: ViewState): void {
@@ -101,11 +142,16 @@ export class DomBackend implements Backend {
       this.writeContent(text, state);
       this.rendered = text;
       this.syncLayerBreadth();
+      this.syncSpacer();
     }
     this.state = state;
     this.placeholder.textContent = state.placeholder ?? "";
     this.placeholder.style.display = state.placeholder ? "block" : "none";
     this.schedule();
+  }
+
+  get fontSize(): number {
+    return this.metrics.size;
   }
 
   get lineCount(): number {
@@ -131,7 +177,8 @@ export class DomBackend implements Backend {
 
   /** canvas 版と揃えて、surface を原点にした矩形を返す。送り方向の厚みは持たない */
   caretRect(caret: Caret): CaretRect {
-    const breadth = this.lineHeight;
+    // 行を横切る向きの長さは字が入っている箱ぶん。行送りは含めない
+    const breadth = fontBoxSize(this.container.ownerDocument, this.metrics.css, this.metrics.size);
     const surface = this.surface.getBoundingClientRect();
     const layer = this.layer.getBoundingClientRect();
     const box = this.caretBox(caret);
@@ -186,43 +233,49 @@ export class DomBackend implements Backend {
     return Math.min(offset + 1, this.textLength);
   }
 
-  /** 送り方向に読み進んだ量。向きに依らず 0 以上 */
+  // ---- 送り。中身は DomScroller ----
+
+  /** 送りが組みから引くもの。組み直しのたびに変わるので、値ではなく読み方を渡す */
+  private scrollHost(): ScrollHost {
+    return {
+      surface: this.surface,
+      vertical: () => this.vertical,
+      lineHeight: () => this.lineHeight,
+      padStart: () => (this.vertical ? this.metrics.padding.left : this.metrics.padding.top),
+      padEnd: () => (this.vertical ? this.metrics.padding.right : this.metrics.padding.bottom),
+      contentLength: () => {
+        const box = this.content.getBoundingClientRect();
+        return this.vertical ? box.width : box.height;
+      },
+      caretRect: (caret) => this.caretRect(caret),
+      state: () => this.state,
+    };
+  }
+
   get scrollOffset(): number {
-    return readScroll(this.surface, this.vertical);
+    return this.scroller.scrollOffset;
   }
 
   set scrollOffset(value: number) {
-    const next = this.clampScroll(value);
-    writeScroll(this.surface, this.vertical, next);
+    this.scroller.scrollOffset = value;
   }
 
   ensureVisible(caret: Caret): void {
-    const visible = this.vertical ? this.surface.clientWidth : this.surface.clientHeight;
-    if (visible === 0) return;
-    const { padding } = this.options;
-    const rect = this.caretRect(caret);
-    // caretRect は送りぶんを含んでいるので、はみ出した差だけ足し引きする
-    const center = this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
-    const near = center - this.lineHeight / 2;
-    const far = center + this.lineHeight / 2;
+    this.scroller.ensureVisible(caret);
+  }
 
-    const scroll = this.scrollOffset;
-    if (this.vertical) {
-      if (near < padding.left) this.scrollOffset = scroll + (padding.left - near);
-      else if (far > visible - padding.right) {
-        this.scrollOffset = scroll - (far - (visible - padding.right));
-      }
-      return;
-    }
-    if (near < padding.top) this.scrollOffset = scroll - (padding.top - near);
-    else if (far > visible - padding.bottom) {
-      this.scrollOffset = scroll + (far - (visible - padding.bottom));
-    }
+  anchorCaret(): void {
+    this.scroller.anchorCaret();
+  }
+
+  forgetAnchor(): void {
+    this.scroller.forgetAnchor();
   }
 
   destroy(): void {
     this.destroyed = true;
     if (this.frame) cancelAnimationFrame(this.frame);
+    this.scroller.destroy();
     this.resizeObserver?.disconnect();
     for (const dispose of this.disposers) dispose();
     this.disposers.length = 0;
@@ -235,81 +288,118 @@ export class DomBackend implements Backend {
     return this.options.writingMode === "vertical-rl";
   }
 
+  /**
+   * 行送り。CSS の line-height をそのまま信じない。
+   * Safari は端数を整数に丸める (17px × 1.8 = 30.6 → 30) ので、
+   * 決め打つと行番号に比例してキャレットが本文からずれていく。
+   * 実際に組まれた行の間隔を測って、それを使う。
+   */
   private get lineHeight(): number {
-    return this.options.font.size * this.options.font.lineHeight;
+    if (this.pitch === null) this.pitch = this.measurePitch();
+    return this.pitch;
+  }
+
+  /** 組まれた行の間隔。測れなければ CSS の指定で代用する */
+  private measurePitch(): number {
+    const fallback = this.metrics.lineHeight;
+    const node = this.nodes[0]?.node;
+    if (!node) return fallback;
+
+    // 行が 2 本見つかれば足りる。長い本文で全行ぶんの矩形を作らない
+    const range = this.container.ownerDocument.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, Math.min(node.length, PITCH_SAMPLE));
+    const rects = Array.from(range.getClientRects());
+    if (rects.length < 2) return fallback;
+
+    // 同じ行に複数の断片が出ることがある。1/4px に丸めて行の位置だけを拾う
+    const blocks = rects.map((rect) =>
+      Math.round((this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2) * 4),
+    );
+    const sorted = [...new Set(blocks)].sort((a, b) => a - b);
+
+    // 空行は行 2 つぶんの隙間を作る。いちばん狭い隙間が行送り
+    let pitch = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = (sorted[i] - sorted[i - 1]) / 4;
+      if (gap > 1 && gap < pitch) pitch = gap;
+    }
+    return Number.isFinite(pitch) ? pitch : fallback;
   }
 
   /** layer の block 始端からの距離 → クライアント座標 */
-  private toClient(block: number, inline: number, layer: DOMRect): { x: number; y: number } {
-    return this.vertical
-      ? { x: layer.right - block, y: layer.top + inline }
-      : { x: layer.left + inline, y: layer.top + block };
+  // 計算そのものは axis.ts。ここは向きと、測った行送りを差すだけ
+
+  private toClient(block: number, inline: number, layer: DOMRect) {
+    return axis.toClient(this.vertical, block, inline, layer);
   }
 
   private lineAt(block: number): number {
-    return Math.max(0, Math.floor(block / this.lineHeight));
+    return axis.lineAt(this.lineHeight, block);
   }
 
   private lineOfRect(rect: DOMRect, layer: DOMRect): number {
-    const center = this.vertical
-      ? layer.right - (rect.x + rect.width / 2)
-      : rect.y + rect.height / 2 - layer.top;
-    return this.lineAt(center);
+    return this.lineAt(axis.blockOfRectInLayer(this.vertical, rect, layer));
   }
 
   private inlineStartOf(rect: DOMRect, layer: DOMRect): number {
-    return this.vertical ? rect.top - layer.top : rect.left - layer.left;
+    return axis.inlineStartOf(this.vertical, rect, layer);
   }
 
   private inlineEndOf(rect: DOMRect, layer: DOMRect): number {
-    return this.vertical ? rect.bottom - layer.top : rect.right - layer.left;
+    return axis.inlineEndOf(this.vertical, rect, layer);
   }
 
   private inlineSizeOf(rect: DOMRect): number {
-    return this.vertical ? rect.height : rect.width;
+    return axis.inlineSizeOf(this.vertical, rect);
   }
 
   private layerLength(layer: DOMRect): number {
-    return this.vertical ? layer.height : layer.width;
+    return axis.layerLength(this.vertical, layer);
   }
 
-  /** surface 基準のキャレット矩形から block 方向の中心を取り出す。矩形は行ボックス全体 */
   private blockOfCaret(rect: CaretRect): number {
-    return this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+    return axis.blockOfCaret(this.vertical, rect);
   }
 
   private inlineOfCaret(rect: CaretRect): number {
-    return this.vertical ? rect.y : rect.x;
+    return axis.inlineOfCaret(this.vertical, rect);
   }
 
   private blockOfCaretInLayer(rect: CaretRect, layer: DOMRect): number {
     const surface = this.surface.getBoundingClientRect();
-    return this.vertical
-      ? layer.right - (surface.x + rect.x + rect.width / 2)
-      : surface.y + rect.y + rect.height / 2 - layer.top;
+    return axis.blockOfCaretInLayer(this.vertical, rect, layer, surface);
   }
 
-  /** surface 基準の inline 位置 → layer 基準 */
   private inlineInLayer(distance: number, layer: DOMRect): number {
     const surface = this.surface.getBoundingClientRect();
-    return this.vertical ? surface.y + distance - layer.top : surface.x + distance - layer.left;
+    return axis.inlineInLayer(this.vertical, distance, layer, surface);
   }
 
   private visibleBreadth(): number {
-    const { padding } = this.options;
-    return this.vertical
-      ? this.surface.clientWidth - padding.left - padding.right
-      : this.surface.clientHeight - padding.top - padding.bottom;
+    return this.scroller.visibleBreadth();
   }
 
   // ---- 組み ----
+
+  /**
+   * 寸法 → 組み → 送れる上限 の順に揃える。
+   * 上限は組み上がりから決まるので、測って確定させたあとでないと古い値のままになる。
+   * そのあとに送ると、送りがその古い上限で丸められる
+   */
+  private syncGeometry(): void {
+    this.syncMetrics();
+    // getBoundingClientRect が組みを確定させる
+    this.syncLayerBreadth();
+    this.syncSpacer();
+  }
 
   /**
    * 行の長さを px で入れる。% のままだと block 方向を決める段階で
    * inline 方向が未定になり、縦書き (直交フロー) の幅が決まらない。
    */
   private syncMetrics(): void {
-    const { padding } = this.options;
+    const { padding } = this.metrics;
     const length = Math.max(
       0,
       this.vertical
@@ -322,7 +412,6 @@ export class DomBackend implements Backend {
       el.style[key] = `${length}px`;
       if (el !== this.layer) el.style[other] = "";
     }
-    this.syncLayerBreadth();
   }
 
   /**
@@ -335,14 +424,13 @@ export class DomBackend implements Backend {
     const box = this.content.getBoundingClientRect();
     if (this.vertical) this.layer.style.width = `${box.width}px`;
     else this.layer.style.height = `${box.height}px`;
-    this.syncSpacer();
   }
 
   /** スクロールできる量を maxScroll に合わせる。器のぶんを足した大きさが要る */
   private syncSpacer(): void {
     const vertical = this.vertical;
     const visible = vertical ? this.surface.clientWidth : this.surface.clientHeight;
-    const extent = visible + this.maxScroll();
+    const extent = visible + this.scroller.maxScroll();
     Object.assign(this.spacer.style, {
       width: vertical ? `${extent}px` : "1px",
       height: vertical ? "1px" : `${extent}px`,
@@ -350,7 +438,10 @@ export class DomBackend implements Backend {
   }
 
   private applyStyles(): void {
-    const { font, padding, theme, kinsoku, writingMode } = this.options;
+    // 字の大きさや組み方が変われば行送りも変わる。測り直す
+    this.pitch = null;
+    const { writingMode, theme } = this.options;
+    const { padding } = this.metrics;
     const vertical = this.vertical;
 
     // 縦組みの I ビームは横向き。text は横書き用
@@ -366,6 +457,7 @@ export class DomBackend implements Backend {
       touchAction: vertical ? "pan-x" : "pan-y",
     } satisfies Partial<CSSStyleDeclaration>);
 
+    // font と line-break は container から継承させる。ここで書くと CSS を上書きしてしまう
     const common = {
       position: "absolute",
       top: "0",
@@ -376,9 +468,6 @@ export class DomBackend implements Backend {
       wordBreak: "normal",
       // ネイティブの textarea (wrap=soft) と同じ。1 行に収まらない綴りは割る
       overflowWrap: "break-word",
-      // 禁則をブラウザに任せる。強弱の 2 段しか選べない
-      lineBreak: kinsoku ? "strict" : "loose",
-      font: `${font.weight} ${font.size}px/${font.lineHeight} ${font.family}`,
       // 選択は自前で描くので、ブラウザの選択は出させない
       userSelect: "none",
       WebkitUserSelect: "none",
@@ -410,6 +499,7 @@ export class DomBackend implements Backend {
     const composition = state.composition;
     this.content.textContent = "";
     this.nodes = [];
+    this.pitch = null;
 
     const push = (slice: string, start: number, parent: HTMLElement) => {
       if (!slice) return;
@@ -432,11 +522,13 @@ export class DomBackend implements Backend {
     ] as const) {
       if (from >= to) continue;
       const span = doc.createElement("span");
-      span.style.textDecoration = "underline";
-      span.style.textDecorationThickness = active ? "2px" : "1px";
-      span.style.textDecorationColor = active
-        ? this.options.theme.compositionActive
-        : this.options.theme.composition;
+      Object.assign(span.style, {
+        textDecoration: "underline",
+        textDecorationThickness: active ? "2px" : "1px",
+        textDecorationColor: active
+          ? this.options.theme.compositionActive
+          : this.options.theme.composition,
+      } satisfies Partial<CSSStyleDeclaration>);
       this.content.appendChild(span);
       push(text.slice(from, to), from, span);
     }
@@ -578,48 +670,27 @@ export class DomBackend implements Backend {
     }
 
     const limit = this.textLength;
-    if (!node) return limit;
+    // 突いた場所が本文に当たらないことがある (余白・重なり・エンジン差)。
+    // 文末へ飛ばすとキャレットが画面外へ出て、iOS ではキーボードが開いて即閉じる。
+    // 当たらなければ動かさない
+    const fallback = this.state?.caret.offset ?? 0;
+    if (!node) return Math.min(fallback, limit);
     for (const entry of this.nodes) {
       if (entry.node === node) return Math.min(entry.start + offset, limit);
     }
-    return limit;
-  }
-
-  // ---- 送り ----
-
-  private maxScroll(): number {
-    const box = this.content.getBoundingClientRect();
-    const total = this.vertical ? box.width : box.height;
-    return Math.max(0, total - this.visibleBreadth());
-  }
-
-  private clampScroll(value: number): number {
-    return value < 0 ? 0 : Math.min(value, this.maxScroll());
-  }
-
-  /**
-   * ホイールは自前で受ける。縦組みで「下へ回す = 左へ読み進む」になるかは
-   * エンジン任せにできないので、軸の対応をここで決めてしまう。
-   * タッチのパンは touch-action に任せてあるので、ここは通らない
-   */
-  private bindWheel(): void {
-    const listener = (event: WheelEvent) => {
-      if (this.maxScroll() <= 0) return;
-      event.preventDefault();
-      this.scrollOffset =
-        this.scrollOffset + (this.vertical ? event.deltaY - event.deltaX : event.deltaY);
-    };
-    this.surface.addEventListener("wheel", listener, { passive: false });
-    this.disposers.push(() => this.surface.removeEventListener("wheel", listener));
+    return Math.min(fallback, limit);
   }
 
   private observeResize(): void {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
-      this.syncMetrics();
       // 器が変われば行の長さも変わって全部組み直る。
-      // 書いている最中なら、キャレットが画面の外に流れないように追う
-      if (this.state?.focused) this.ensureVisible(this.state.caret);
+      // 送れる上限を先に直しておかないと、このあとの送りが古い上限で丸められる
+      this.syncGeometry();
+      // 書いている最中なら、キャレットが画面の外に流れないように追う。
+      // ここで正解が出るので、rAF は丸められていたときの保険で足りる
+      this.scroller.follow();
+      this.scroller.scheduleFollow();
       this.schedule();
     });
     this.resizeObserver.observe(this.container);
@@ -682,6 +753,50 @@ export class DomBackend implements Backend {
       this.caretLayer.appendChild(bar);
     }
   }
+}
+
+/**
+ * 組みに要る寸法を container の計算スタイルから読む。
+ *
+ * font も padding も禁則も CSS に置いたので、値はここからしか来ない。
+ * padding を数値で取り直しているのは、surface が inset:0 で padding box に
+ * 載る (= 余白のぶんは詰まらない) ため。余白は layer の位置と送りの余裕として
+ * 自分で使う。ネイティブの textarea と同じく、字は余白の下まで送れる。
+ */
+function readMetrics(container: HTMLElement): Metrics {
+  const view = container.ownerDocument.defaultView;
+  const style = view?.getComputedStyle(container);
+  const size = px(style?.fontSize, 16);
+  // line-height: normal は px に解決されない。測れなかったときの代用なので目安で足りる
+  const lineHeight = px(style?.lineHeight, size * 1.2);
+  return {
+    css: `${style?.fontWeight ?? "400"} ${size}px ${style?.fontFamily ?? "serif"}`,
+    size,
+    lineHeight,
+    padding: {
+      top: px(style?.paddingTop, 0),
+      right: px(style?.paddingRight, 0),
+      bottom: px(style?.paddingBottom, 0),
+      left: px(style?.paddingLeft, 0),
+    },
+  };
+}
+
+function sameMetrics(a: Metrics, b: Metrics): boolean {
+  return (
+    a.css === b.css &&
+    a.size === b.size &&
+    a.lineHeight === b.lineHeight &&
+    a.padding.top === b.padding.top &&
+    a.padding.right === b.padding.right &&
+    a.padding.bottom === b.padding.bottom &&
+    a.padding.left === b.padding.left
+  );
+}
+
+function px(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 const ZERO_WIDTH_SPACE = "​";

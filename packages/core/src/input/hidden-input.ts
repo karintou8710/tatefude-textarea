@@ -19,6 +19,7 @@ export interface HiddenInputHandlers {
  */
 export class HiddenInput {
   readonly element: HTMLTextAreaElement;
+  private container: HTMLElement;
   private composing = false;
   private disposers: (() => void)[] = [];
 
@@ -26,6 +27,7 @@ export class HiddenInput {
     container: HTMLElement,
     private handlers: HiddenInputHandlers,
   ) {
+    this.container = container;
     const element = container.ownerDocument.createElement("textarea");
     element.setAttribute("autocapitalize", "off");
     element.setAttribute("autocorrect", "off");
@@ -160,8 +162,11 @@ export class HiddenInput {
     const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
     style.writingMode = mode;
     style.cursor = vertical ? "vertical-text" : "text";
-    style.left = `${vertical ? Math.round(center + size / 2) - 1 : Math.round(rect.x)}px`;
-    style.top = `${vertical ? Math.round(rect.y) : Math.round(center - size / 2)}px`;
+    // 器の外へ出すと iOS がキーボードを開いた直後に閉じる。端で止める
+    const left = vertical ? Math.round(center + size / 2) - 1 : Math.round(rect.x);
+    const top = vertical ? Math.round(rect.y) : Math.round(center - size / 2);
+    style.left = `${clamp(left, 0, this.container.clientWidth - 1)}px`;
+    style.top = `${clamp(top, 0, this.container.clientHeight - 1)}px`;
     style.fontSize = `${size}px`;
   }
 
@@ -186,4 +191,9 @@ export class HiddenInput {
     this.disposers.length = 0;
     this.element.remove();
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return value < min ? min : value > max ? max : value;
 }
