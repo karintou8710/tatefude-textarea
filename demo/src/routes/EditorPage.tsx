@@ -1,36 +1,44 @@
 import { useRef, useState } from "react";
 import type { TextareaHandle } from "tatefude-textarea-react";
-import styles from "./App.module.css";
-import { Controls } from "./components/Controls";
-import { EditorPane } from "./components/EditorPane";
-import { Footer } from "./components/Footer";
-import { Header } from "./components/Header";
-import { SelectionToolbar } from "./components/SelectionToolbar";
-import { useViewportHeight } from "./hooks/useViewportHeight";
-import { sampleText } from "./sample";
-import { defaultSettings, type Settings } from "./settings";
+import { Controls } from "../components/Controls";
+import { EditorPane } from "../components/EditorPane";
+import { Footer } from "../components/Footer";
+import { Header } from "../components/Header";
+import { SelectionToolbar } from "../components/SelectionToolbar";
+import { useSoftKeyboard } from "../hooks/useSoftKeyboard";
+import { useViewportHeight } from "../hooks/useViewportHeight";
+import { useSettings } from "../settings-store";
+import styles from "./EditorPage.module.css";
 
-export function App() {
-  const [value, setValue] = useState(sampleText);
-  const [settings, setSettings] = useState(defaultSettings);
+interface Props {
+  initialText: string;
+}
+
+export function EditorPage({ initialText }: Props) {
+  const [value, setValue] = useState(initialText);
+  const { settings, update } = useSettings();
   const editorRef = useRef<TextareaHandle>(null);
-  const [selected, setSelected] = useState(false);
+  const [selection, setSelection] = useState({ anchor: 0, focus: 0 });
   useViewportHeight();
-
-  const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...prev, ...patch }));
+  // キーボードが出ると縦書きの行はそのぶん短くなる。ヘッダーのぶんまで削らない
+  const keyboardOpen = useSoftKeyboard();
 
   return (
     <div className={styles.page}>
-      <Header />
+      {!keyboardOpen && <Header />}
       <Controls settings={settings} onChange={update} onFocus={() => editorRef.current?.focus()} />
       <EditorPane
         ref={editorRef}
         settings={settings}
         value={value}
         onChange={setValue}
-        onSelectionChange={(selection) => setSelected(selection.anchor !== selection.focus)}
+        onSelectionChange={setSelection}
       />
-      <SelectionToolbar editor={editorRef.current} selected={selected} />
+      <SelectionToolbar
+        editor={editorRef.current}
+        writingMode={settings.writingMode}
+        selection={selection}
+      />
       <Footer count={value.length} writingMode={settings.writingMode} />
     </div>
   );
