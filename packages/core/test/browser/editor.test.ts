@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CanvasVertTextarea } from "../../src/canvas/index";
-import { DomVertTextarea } from "../../src/dom/index";
-import type { VertTextareaOptions, WritingMode } from "../../src/types";
-import type { VertTextarea } from "../../src/vert-textarea";
+import { CanvasTextarea } from "../../src/canvas/index";
+import { DomTextarea } from "../../src/dom/index";
+import type { Textarea } from "../../src/textarea";
+import type { TextareaOptions, WritingMode } from "../../src/types";
 
-type Ctor = new (container: HTMLElement, options?: VertTextareaOptions) => VertTextarea;
+type Ctor = new (container: HTMLElement, options?: TextareaOptions) => Textarea;
 
 // 2 つのバックエンド × 縦横。キー操作は論理なので、どれでも同じ振る舞いになる
 const backends: [name: string, ctor: Ctor, writingMode: WritingMode][] = [
-  ["canvas 縦書き", CanvasVertTextarea, "vertical-rl"],
-  ["dom 縦書き", DomVertTextarea, "vertical-rl"],
-  ["canvas 横書き", CanvasVertTextarea, "horizontal-tb"],
-  ["dom 横書き", DomVertTextarea, "horizontal-tb"],
+  ["canvas 縦書き", CanvasTextarea, "vertical-rl"],
+  ["dom 縦書き", DomTextarea, "vertical-rl"],
+  ["canvas 横書き", CanvasTextarea, "horizontal-tb"],
+  ["dom 横書き", DomTextarea, "horizontal-tb"],
 ];
 
 const cleanups: (() => void)[] = [];
@@ -20,10 +20,10 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-let Editor: Ctor = CanvasVertTextarea;
+let Editor: Ctor = CanvasTextarea;
 let writingMode: WritingMode = "vertical-rl";
 
-function setup(options: VertTextareaOptions = {}) {
+function setup(options: TextareaOptions = {}) {
   const container = document.createElement("div");
   Object.assign(container.style, { width: "300px", height: "200px" });
   document.body.appendChild(container);
@@ -402,13 +402,13 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 });
 
 // 描画の中身を見たいものは dom バックエンドで覗く。
-// 判断しているのは共通の VertTextarea なので、片方で確かめれば足りる
+// 判断しているのは共通の Textarea なので、片方で確かめれば足りる
 describe("描画", () => {
-  function mount(options: VertTextareaOptions = {}) {
+  function mount(options: TextareaOptions = {}) {
     const container = document.createElement("div");
     Object.assign(container.style, { width: "300px", height: "200px" });
     document.body.appendChild(container);
-    const editor = new DomVertTextarea(container, {
+    const editor = new DomTextarea(container, {
       writingMode: "vertical-rl",
       font: { size: 20, lineHeight: 1.8 },
       padding: 10,

@@ -1,6 +1,6 @@
-import type { WritingMode } from "canvas-vert-textarea";
-import { VertTextarea, type VertTextareaHandle } from "canvas-vert-textarea-react";
 import { useRef, useState } from "react";
+import type { WritingMode } from "tatefude-textarea";
+import { Textarea, type TextareaHandle } from "tatefude-textarea-react";
 import { sampleText } from "./sample";
 import { usePrefersDark } from "./useColorScheme";
 
@@ -38,8 +38,8 @@ export function App() {
   const [smallKanaShift, setSmallKanaShift] = useState(0.08);
   const [linked, setLinked] = useState(true);
   const [writingMode, setWritingMode] = useState<WritingMode>("vertical-rl");
-  const canvasRef = useRef<VertTextareaHandle>(null);
-  const domRef = useRef<VertTextareaHandle>(null);
+  const canvasRef = useRef<TextareaHandle>(null);
+  const domRef = useRef<TextareaHandle>(null);
   const dark = usePrefersDark();
 
   const shared = {
@@ -55,7 +55,7 @@ export function App() {
   return (
     <div className="page">
       <header>
-        <h1>canvas-vert-textarea</h1>
+        <h1>tatefude-textarea</h1>
         <p className="lead">
           同じ API の 2 実装を並べています。左が canvas に字を 1 つずつ置くもの、 右がブラウザの
           writing-mode に組ませて Range API で読み返すもの。
@@ -137,7 +137,7 @@ export function App() {
             </button>
           </h2>
           <div className="editor">
-            <VertTextarea
+            <Textarea
               ref={canvasRef}
               backend="canvas"
               {...shared}
@@ -154,7 +154,7 @@ export function App() {
             </button>
           </h2>
           <div className="editor">
-            <VertTextarea
+            <Textarea
               ref={domRef}
               backend="dom"
               {...shared}

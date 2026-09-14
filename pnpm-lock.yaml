@@ -14,18 +14,18 @@ importers:
 
   demo:
     dependencies:
-      canvas-vert-textarea:
-        specifier: workspace:*
-        version: link:../packages/core
-      canvas-vert-textarea-react:
-        specifier: workspace:*
-        version: link:../packages/react
       react:
         specifier: ^19.2.8
         version: 19.3.0
       react-dom:
         specifier: ^19.2.8
         version: 19.3.0(react@19.3.0)
+      tatefude-textarea:
+        specifier: workspace:*
+        version: link:../packages/core
+      tatefude-textarea-react:
+        specifier: workspace:*
+        version: link:../packages/react
     devDependencies:
       '@types/react':
         specifier: ^19.2.18
@@ -72,12 +72,12 @@ importers:
       '@types/react':
         specifier: ^19.2.18
         version: 19.3.0
-      canvas-vert-textarea:
-        specifier: workspace:*
-        version: link:../core
       react:
         specifier: ^19.2.8
         version: 19.3.0
+      tatefude-textarea:
+        specifier: workspace:*
+        version: link:../core
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(typescript@7.0.2)

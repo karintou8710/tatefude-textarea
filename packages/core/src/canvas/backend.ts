@@ -55,7 +55,7 @@ export class CanvasBackend implements Backend {
     container.appendChild(this.surface);
 
     const ctx = this.surface.getContext("2d");
-    if (!ctx) throw new Error("canvas-vert-textarea: 2d コンテキストが取れない");
+    if (!ctx) throw new Error("tatefude-textarea: 2d コンテキストが取れない");
 
     this.measurer = new CanvasMeasurer(ctx, options.font);
     this.renderer = new Renderer(ctx, options);

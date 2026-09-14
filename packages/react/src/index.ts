@@ -1,3 +1,3 @@
-export type { FontStyle, Selection, Theme, VertTextareaOptions } from "canvas-vert-textarea";
-export type { Backend, VertTextareaHandle, VertTextareaProps } from "./VertTextarea";
-export { VertTextarea } from "./VertTextarea";
+export type { FontStyle, Selection, TextareaOptions, Theme } from "tatefude-textarea";
+export type { Backend, TextareaHandle, TextareaProps } from "./Textarea";
+export { Textarea } from "./Textarea";

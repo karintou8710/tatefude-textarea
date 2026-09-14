@@ -40,7 +40,7 @@ export interface Selection {
   focus: number;
 }
 
-export interface VertTextareaOptions {
+export interface TextareaOptions {
   value?: string;
   /** 既定は縦書き */
   writingMode?: WritingMode;
@@ -99,7 +99,7 @@ export const defaultTheme: Theme = {
   compositionActive: "#2563eb",
 };
 
-export function resolveOptions(options: VertTextareaOptions): ResolvedOptions {
+export function resolveOptions(options: TextareaOptions): ResolvedOptions {
   return {
     writingMode: options.writingMode ?? "vertical-rl",
     placeholder: options.placeholder ?? "",
@@ -115,7 +115,7 @@ export function resolveOptions(options: VertTextareaOptions): ResolvedOptions {
   };
 }
 
-function resolvePadding(padding: VertTextareaOptions["padding"]): Padding {
+function resolvePadding(padding: TextareaOptions["padding"]): Padding {
   if (typeof padding === "number") {
     return { top: padding, right: padding, bottom: padding, left: padding };
   }

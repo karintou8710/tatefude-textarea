@@ -1,9 +1,9 @@
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasVertTextarea } from "../../src/canvas/index";
-import { DomVertTextarea } from "../../src/dom/index";
-import type { VertTextareaOptions } from "../../src/types";
-import type { VertTextarea } from "../../src/vert-textarea";
+import { CanvasTextarea } from "../../src/canvas/index";
+import { DomTextarea } from "../../src/dom/index";
+import type { Textarea } from "../../src/textarea";
+import type { TextareaOptions } from "../../src/types";
 
 /**
  * Blink の <textarea> を基準にする。
@@ -43,10 +43,7 @@ function native(value: string) {
   return element;
 }
 
-function ours(
-  Ctor: new (host: HTMLElement, options: VertTextareaOptions) => VertTextarea,
-  value: string,
-) {
+function ours(Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea, value: string) {
   const host = document.createElement("div");
   Object.assign(host.style, {
     width: `${BREADTH + PADDING * 2}px`,
@@ -79,7 +76,7 @@ async function traceNative(value: string, start: number, keys: string[]) {
 }
 
 async function traceOurs(
-  Ctor: new (host: HTMLElement, options: VertTextareaOptions) => VertTextarea,
+  Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea,
   value: string,
   start: number,
   keys: string[],
@@ -133,8 +130,8 @@ const cases: [name: string, value: string, start: number, keys: string[]][] = [
 describe("Blink の textarea と突き合わせる", () => {
   it.each(cases)("%s", async (_name, value, start, keys) => {
     const base = await traceNative(value, start, keys);
-    const canvas = await traceOurs(CanvasVertTextarea, value, start, keys);
-    const dom = await traceOurs(DomVertTextarea, value, start, keys);
+    const canvas = await traceOurs(CanvasTextarea, value, start, keys);
+    const dom = await traceOurs(DomTextarea, value, start, keys);
 
     expect([...diff("canvas", base, canvas), ...diff("dom", base, dom)]).toEqual([]);
   });

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasVertTextarea } from "../../src/canvas/index";
-import { DomVertTextarea } from "../../src/dom/index";
-import type { VertTextareaOptions } from "../../src/types";
-import type { VertTextarea } from "../../src/vert-textarea";
+import { CanvasTextarea } from "../../src/canvas/index";
+import { DomTextarea } from "../../src/dom/index";
+import type { Textarea } from "../../src/textarea";
+import type { TextareaOptions } from "../../src/types";
 
 /**
  * 2 つのバックエンドが同じ操作で同じところに着くことを縛る。
@@ -24,10 +24,7 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-function mount(
-  Ctor: new (host: HTMLElement, options: VertTextareaOptions) => VertTextarea,
-  value: string,
-) {
+function mount(Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea, value: string) {
   const host = document.createElement("div");
   Object.assign(host.style, { width: `${WIDTH}px`, height: `${HEIGHT}px` });
   document.body.appendChild(host);
@@ -45,7 +42,7 @@ function mount(
 }
 
 function pair(value: string) {
-  return { canvas: mount(CanvasVertTextarea, value), dom: mount(DomVertTextarea, value) };
+  return { canvas: mount(CanvasTextarea, value), dom: mount(DomTextarea, value) };
 }
 
 interface Step {
@@ -57,7 +54,7 @@ interface Step {
   y: number;
 }
 
-function state(editor: VertTextarea, label = ""): Step {
+function state(editor: Textarea, label = ""): Step {
   const rect = editor.caretRect;
   return {
     label,
@@ -89,7 +86,7 @@ function expectSame(canvasSteps: Step[], domSteps: Step[]) {
 }
 
 function drive(
-  target: { editor: VertTextarea; textarea: HTMLTextAreaElement },
+  target: { editor: Textarea; textarea: HTMLTextAreaElement },
   keys: readonly (readonly [string, KeyboardEventInit?])[],
 ): Step[] {
   return keys.map(([name, init]) => {
@@ -227,7 +224,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
   });
 
   it("編集したあとも揃っている", () => {
-    const cases: ((editor: VertTextarea) => void)[] = [
+    const cases: ((editor: Textarea) => void)[] = [
       (e) => {
         e.selectAll();
         e.insertText("か");

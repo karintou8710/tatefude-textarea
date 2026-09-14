@@ -8,7 +8,7 @@ import {
   type ResolvedOptions,
   resolveOptions,
   type Selection,
-  type VertTextareaOptions,
+  type TextareaOptions,
 } from "./types";
 
 interface Composition {
@@ -30,14 +30,14 @@ export interface SetValueOptions {
  * 縦書きテキストエリアの本体。
  * テキスト・履歴・キー操作・IME だけを持ち、組み方と描き方は Backend に委ねる。
  */
-export class VertTextarea {
+export class Textarea {
   readonly container: HTMLElement;
 
   protected backend: Backend;
   private input: HiddenInput;
   private history = new History();
   private options: ResolvedOptions;
-  private callbacks: VertTextareaOptions;
+  private callbacks: TextareaOptions;
 
   private text = "";
   private anchor = 0;
@@ -52,7 +52,7 @@ export class VertTextarea {
   private destroyed = false;
   private disposers: (() => void)[] = [];
 
-  constructor(container: HTMLElement, options: VertTextareaOptions, createBackend: BackendFactory) {
+  constructor(container: HTMLElement, options: TextareaOptions, createBackend: BackendFactory) {
     this.container = container;
     this.callbacks = options;
     this.options = resolveOptions(options);
@@ -168,7 +168,7 @@ export class VertTextarea {
     return this.history.canRedo;
   }
 
-  setOptions(options: VertTextareaOptions): void {
+  setOptions(options: TextareaOptions): void {
     this.callbacks = { ...this.callbacks, ...options };
     this.options = resolveOptions(this.callbacks);
     this.backend.setOptions(this.options);

@@ -1,7 +1,7 @@
 {
-  "name": "canvas-vert-textarea-react",
+  "name": "tatefude-textarea-react",
   "version": "0.0.0",
-  "description": "canvas-vert-textarea \u306e React \u30a2\u30c0\u30d7\u30bf",
+  "description": "tatefude-textarea \u306e React \u30a2\u30c0\u30d7\u30bf",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -24,12 +24,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "canvas-vert-textarea": "workspace:^",
+    "tatefude-textarea": "workspace:^",
     "react": "^18.2.0 || ^19.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
-    "canvas-vert-textarea": "workspace:*",
+    "tatefude-textarea": "workspace:*",
     "react": "^19.2.8",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2"

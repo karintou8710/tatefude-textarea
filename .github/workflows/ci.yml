@@ -25,6 +25,6 @@ jobs:
       - run: pnpm test
       # 縦組みの送りを実際の字で測りたい。CJK フォントが無いと豆腐になる
       - run: sudo apt-get install -y --no-install-recommends fonts-noto-cjk
-      - run: pnpm --filter canvas-vert-textarea exec playwright install --with-deps chromium webkit
-      - run: pnpm --filter canvas-vert-textarea test:browser
+      - run: pnpm --filter tatefude-textarea exec playwright install --with-deps chromium webkit
+      - run: pnpm --filter tatefude-textarea test:browser
       - run: pnpm build

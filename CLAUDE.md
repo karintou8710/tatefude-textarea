@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 置き場所
 
-- `packages/core/src/vert-textarea.ts` … テキスト・選択・履歴・キー操作・IME。
+- `packages/core/src/textarea.ts` … テキスト・選択・履歴・キー操作・IME。
   組み方と描き方は持たない。
 - `packages/core/src/backend.ts` … 組み方と描き方の境界。ここを実装すれば別の組み方を足せる。
 - `packages/core/src/canvas` … 字を 1 つずつ canvas に置く実装。

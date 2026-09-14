@@ -36,7 +36,7 @@ export interface ViewState {
 
 /**
  * 縦組みの表示と、そこから引ける幾何だけを持つ。
- * テキストの中身・履歴・キー操作・IME は VertTextarea 側の仕事。
+ * テキストの中身・履歴・キー操作・IME は Textarea 側の仕事。
  */
 export interface Backend {
   /** ポインタを拾う要素。container の中に置く */

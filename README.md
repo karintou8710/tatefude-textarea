@@ -1,4 +1,4 @@
-# canvas-vert-textarea
+# tatefude-textarea
 
 **組版を自前で持つテキストエリア。縦書きと横書き、canvas と DOM を同じ API で扱う。**
 
@@ -10,15 +10,15 @@
 
 | バックエンド | 組み方 | import |
 | --- | --- | --- |
-| `canvas` | 字を 1 つずつ canvas に置く。行分割・禁則・字の向きを自前で持つ | `canvas-vert-textarea` |
-| `dom` | ブラウザの `writing-mode` に組ませて、落ちた位置を Range API で読み返す | `canvas-vert-textarea/dom` |
+| `canvas` | 字を 1 つずつ canvas に置く。行分割・禁則・字の向きを自前で持つ | `tatefude-textarea` |
+| `dom` | ブラウザの `writing-mode` に組ませて、落ちた位置を Range API で読み返す | `tatefude-textarea/dom` |
 
 同じ振る舞いであることは、[ブラウザテスト](packages/core/test/browser/editor.test.ts)を
 **2 実装 × 縦横 × 2 エンジン (Chromium / WebKit)** に通して縛っている。
 
 ```ts
-new CanvasVertTextarea(host, { writingMode: "vertical-rl" });   // 既定
-new DomVertTextarea(host, { writingMode: "horizontal-tb" });
+new CanvasTextarea(host, { writingMode: "vertical-rl" });   // 既定
+new DomTextarea(host, { writingMode: "horizontal-tb" });
 ```
 
 座標は inline (字の並ぶ向き) と block (行の重なる向き) で持っていて、
@@ -44,15 +44,15 @@ new DomVertTextarea(host, { writingMode: "horizontal-tb" });
 ## 使う
 
 ```sh
-pnpm add canvas-vert-textarea
+pnpm add tatefude-textarea
 ```
 
 ```ts
-import { CanvasVertTextarea } from "canvas-vert-textarea";
+import { CanvasTextarea } from "tatefude-textarea";
 // あるいは
-// import { DomVertTextarea } from "canvas-vert-textarea/dom";
+// import { DomTextarea } from "tatefude-textarea/dom";
 
-const editor = new CanvasVertTextarea(document.getElementById("editor")!, {
+const editor = new CanvasTextarea(document.getElementById("editor")!, {
   value: "吾輩は猫である。名前はまだ無い。",
   placeholder: "ここに書く",
   font: { size: 20, lineHeight: 1.8 },
@@ -69,17 +69,17 @@ editor.focus();
 React なら:
 
 ```sh
-pnpm add canvas-vert-textarea canvas-vert-textarea-react
+pnpm add tatefude-textarea tatefude-textarea-react
 ```
 
 ```tsx
-import { VertTextarea } from "canvas-vert-textarea-react";
+import { Textarea } from "tatefude-textarea-react";
 
 function Editor() {
   const [value, setValue] = useState("");
   return (
     <div style={{ display: "grid", height: 480 }}>
-      <VertTextarea backend="dom" value={value} onChange={setValue} padding={24} />
+      <Textarea backend="dom" value={value} onChange={setValue} padding={24} />
     </div>
   );
 }
@@ -169,7 +169,7 @@ pnpm dev          # demo を立てる (2 実装が並ぶ)
 pnpm typecheck
 pnpm lint
 pnpm test         # レイアウトの単体テスト (node)
-pnpm --filter canvas-vert-textarea test:browser   # エディタのテスト (chromium)
+pnpm --filter tatefude-textarea test:browser   # エディタのテスト (chromium)
 pnpm build
 ```
 

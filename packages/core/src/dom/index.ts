@@ -1,9 +1,9 @@
-import type { VertTextareaOptions } from "../types";
-import { VertTextarea } from "../vert-textarea";
+import { Textarea } from "../textarea";
+import type { TextareaOptions } from "../types";
 import { DomBackend } from "./backend";
 
-export class DomVertTextarea extends VertTextarea {
-  constructor(container: HTMLElement, options: VertTextareaOptions = {}) {
+export class DomTextarea extends Textarea {
+  constructor(container: HTMLElement, options: TextareaOptions = {}) {
     super(container, options, (host, resolved) => new DomBackend(host, resolved));
   }
 }

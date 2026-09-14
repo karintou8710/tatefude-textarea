@@ -6,7 +6,7 @@ export type {
   ViewState,
 } from "./backend";
 export { CanvasBackend } from "./canvas/backend";
-export { CanvasVertTextarea } from "./canvas/index";
+export { CanvasTextarea } from "./canvas/index";
 export type { Geometry, PointHit, Rect } from "./layout/geometry";
 export {
   caretGeometry,
@@ -38,15 +38,15 @@ export {
 } from "./text/char-class";
 export type { Grapheme } from "./text/segment";
 export { segmentGraphemes, stepGrapheme, stepWord } from "./text/segment";
+export type { SetValueOptions } from "./textarea";
+export { Textarea } from "./textarea";
 export type {
   FontStyle,
   Padding,
   ResolvedOptions,
   Selection,
+  TextareaOptions,
   Theme,
-  VertTextareaOptions,
   WritingMode,
 } from "./types";
 export { defaultFont, defaultTheme, resolveOptions } from "./types";
-export type { SetValueOptions } from "./vert-textarea";
-export { VertTextarea } from "./vert-textarea";

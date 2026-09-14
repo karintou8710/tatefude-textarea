@@ -1,5 +1,5 @@
 {
-  "name": "canvas-vert-textarea",
+  "name": "tatefude-textarea",
   "version": "0.0.0",
   "description": "縦書きも横書きも自前で組むテキストエリア。canvas と DOM の 2 実装",
   "license": "MIT",

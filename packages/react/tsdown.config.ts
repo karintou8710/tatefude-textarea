@@ -7,7 +7,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   deps: {
-    neverBundle: ["react", "react/jsx-runtime", "canvas-vert-textarea", "canvas-vert-textarea/dom"],
+    neverBundle: ["react", "react/jsx-runtime", "tatefude-textarea", "tatefude-textarea/dom"],
   },
   outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
 });
