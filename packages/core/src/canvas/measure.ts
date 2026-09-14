@@ -1,5 +1,5 @@
-import type { Orientation } from "../text/char-class";
 import type { FontStyle } from "../types";
+import type { Orientation } from "./char-class";
 
 export interface Measurer {
   /** 全角 1 文字の送り量 */

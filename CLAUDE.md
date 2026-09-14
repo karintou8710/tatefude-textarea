@@ -13,14 +13,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   組み方と描き方は持たない。
 - `packages/core/src/backend.ts` … 組み方と描き方の境界。ここを実装すれば別の組み方を足せる。
 - `packages/core/src/canvas` … 字を 1 つずつ canvas に置く実装。
-  レイアウト (`layout`, `text/char-class`) は canvas を触らないので node のテストで回せる。
+  **canvas 経路でしか使わないものはここに置く。** 外から参照しているものがあれば、
+  それは共有すべきか置き場所が違うかのどちらか。
+  レイアウト (`layout.ts`, `geometry.ts`, `char-class.ts`, `measure.ts`, `movement.ts`) は
+  canvas を触らないので node のテストで回せる。
 - `packages/core/src/dom` … writing-mode に組ませる実装。
 - `packages/react` … core を包むだけ。ロジックを持たせない。
 
 **両バックエンドは同じ振る舞いをする。**片方だけ直したら、もう片方も見る。
 
 **矢印は画面で見た向きに割り当てる。**縦書きなら字送りが `↑↓`、行送りが `←→`。
-ここだけはネイティブの `<textarea>` と違う (あちらは縦書きでも `←→` が字送り)。
+Linux / Windows の `<textarea>` と同じで、macOS の `<textarea>` とだけ違う
+(あちらは矢印が OS のキーバインドから来るので、縦書きでも `←→` が字送り)。
 
 **それ以外のキー操作は Blink の `<textarea>` を基準にする。**
 迷ったら `test/browser/native.test.ts` に本物の textarea を並べて測る。

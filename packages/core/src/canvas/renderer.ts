@@ -1,11 +1,11 @@
 import type { CompositionRange } from "../backend";
-import type { Geometry, Rect } from "../layout/geometry";
-import { caretGeometry, isVertical, selectionRects, toPhysical } from "../layout/geometry";
-import type { Layout, PlacedChar } from "../layout/layout";
-import { cssFont } from "../layout/measure";
 import type { Caret } from "../model/movement";
-import { isSmallKana } from "../text/char-class";
 import type { ResolvedOptions } from "../types";
+import { isSmallKana } from "./char-class";
+import type { Geometry, Rect } from "./geometry";
+import { caretGeometry, isVertical, selectionRects, toPhysical } from "./geometry";
+import type { Layout, PlacedChar } from "./layout";
+import { cssFont } from "./measure";
 
 /** ネイティブの textarea と同じで、字の大きさには比例しない (CSS px) */
 const CARET_WIDTH = 1;

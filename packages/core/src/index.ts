@@ -6,8 +6,15 @@ export type {
   ViewState,
 } from "./backend";
 export { CanvasBackend } from "./canvas/backend";
-export { CanvasTextarea } from "./canvas/index";
-export type { Geometry, PointHit, Rect } from "./layout/geometry";
+export type { Orientation } from "./canvas/char-class";
+export {
+  isLatinWordChar,
+  isLineEndForbidden,
+  isLineStartForbidden,
+  isSmallKana,
+  orientationOf,
+} from "./canvas/char-class";
+export type { Geometry, PointHit, Rect } from "./canvas/geometry";
 export {
   caretGeometry,
   contentBreadth,
@@ -21,21 +28,15 @@ export {
   toLogical,
   toPhysical,
   totalBreadth,
-} from "./layout/geometry";
-export type { Layout, LayoutLine, LayoutParams, PlacedChar } from "./layout/layout";
-export { layoutText } from "./layout/layout";
-export type { Measurer } from "./layout/measure";
-export { CanvasMeasurer, cssFont } from "./layout/measure";
+} from "./canvas/geometry";
+export { CanvasTextarea } from "./canvas/index";
+export type { Layout, LayoutLine, LayoutParams, PlacedChar } from "./canvas/layout";
+export { layoutText } from "./canvas/layout";
+export type { Measurer } from "./canvas/measure";
+export { CanvasMeasurer, cssFont } from "./canvas/measure";
+export { moveAcrossLines, movePage, moveToLineEdge } from "./canvas/movement";
 export type { Caret, Goal } from "./model/movement";
-export { moveAcrossLines, moveInline, movePage, moveToLineEdge } from "./model/movement";
-export type { Orientation } from "./text/char-class";
-export {
-  isLatinWordChar,
-  isLineEndForbidden,
-  isLineStartForbidden,
-  isSmallKana,
-  orientationOf,
-} from "./text/char-class";
+export { moveInline } from "./model/movement";
 export type { Grapheme } from "./text/segment";
 export { segmentGraphemes, stepGrapheme, stepWord } from "./text/segment";
 export type { SetValueOptions } from "./textarea";

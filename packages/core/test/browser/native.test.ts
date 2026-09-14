@@ -10,9 +10,11 @@ import type { TextareaOptions } from "../../src/types";
  * 縦書きのキャレット移動がどう動くのが「普通」なのかは、
  * 仕様書よりブラウザの実装が答えなので、隣に置いて同じキーを打つ。
  *
- * ただし矢印の割り当てだけは合わせていない。ネイティブは縦書きでも
- * ←→ が字送りのままだが、こちらは画面で見た向き (字送り ↑↓ / 行送り ←→) にした。
- * そこで、cases はネイティブに打つキーで書き、こちらへ打つときだけ向きを直す。
+ * 矢印の割り当てだけは Blink 自身が OS で割れている。
+ * Linux / Windows は画面の向きのまま (縦書きなら ↓ が次の字、← が次の行) で、
+ * これはこちらの割り当てと同じ。macOS だけは矢印が OS のキーバインドから来るので、
+ * 縦書きでも ←→ が字送りのままになる。
+ * そこで cases はネイティブに打つキーで書き、macOS のときだけ軸を入れ替えて打つ。
  */
 
 const SIZE = 20;
@@ -87,7 +89,11 @@ const ROTATE: Record<string, string> = {
   ArrowUp: "ArrowRight",
 };
 
+// macOS の Blink だけ縦書きの矢印が論理のまま。ほかの OS は元から同じ割り当て
+const rotates = server.platform === "darwin";
+
 function rotate(stroke: string): string {
+  if (!rotates) return stroke;
   return stroke.replace(/Arrow(Up|Down|Left|Right)/g, (key) => ROTATE[key]);
 }
 

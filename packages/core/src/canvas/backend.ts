@@ -1,4 +1,7 @@
 import type { Backend, CaretRect, ViewState } from "../backend";
+import type { Caret, Goal } from "../model/movement";
+import { readScroll, writeScroll } from "../scroll";
+import type { ResolvedOptions } from "../types";
 import {
   caretGeometry,
   contentBreadth,
@@ -7,14 +10,11 @@ import {
   lineIndexOfOffset,
   offsetFromPoint,
   totalBreadth,
-} from "../layout/geometry";
-import { type Layout, layoutText } from "../layout/layout";
-import { CanvasMeasurer } from "../layout/measure";
-import type { Caret, Goal } from "../model/movement";
-import { moveAcrossLines, moveToLineEdge } from "../model/movement";
-import { Renderer } from "../render/renderer";
-import { readScroll, writeScroll } from "../scroll";
-import type { ResolvedOptions } from "../types";
+} from "./geometry";
+import { type Layout, layoutText } from "./layout";
+import { CanvasMeasurer } from "./measure";
+import { moveAcrossLines, moveToLineEdge } from "./movement";
+import { Renderer } from "./renderer";
 
 /** 字を 1 つずつ canvas に置く。行分割も禁則も字の向きも自前 */
 export class CanvasBackend implements Backend {

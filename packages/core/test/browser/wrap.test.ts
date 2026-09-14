@@ -1,4 +1,4 @@
-import { userEvent } from "@vitest/browser/context";
+import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 import { CanvasTextarea } from "../../src/canvas/index";
 import { DomTextarea } from "../../src/dom/index";
@@ -76,7 +76,11 @@ const cases: [label: string, value: string][] = [
   ["連続空白", `aa    bb    cc    ${"dd ".repeat(20)}`],
 ];
 
-describe("折り返す位置をネイティブ textarea に合わせる", () => {
+/**
+ * 行末を ⌘ + → で辿るので macOS でしか測れない。
+ * ほかの OS の Blink はこの割り当てを持たず、縦書きの ↑↓ ←→ の意味も違う。
+ */
+describe.runIf(server.platform === "darwin")("折り返す位置をネイティブ textarea に合わせる", () => {
   it.each(cases)(
     "%s",
     async (_label, value) => {
