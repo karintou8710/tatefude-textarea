@@ -1,5 +1,10 @@
 import type { CSSProperties, Ref } from "react";
-import type { Textarea as CoreEditor, Selection, TextareaOptions } from "tatefude-textarea";
+import type {
+  CaretRect,
+  Textarea as CoreEditor,
+  Selection,
+  TextareaOptions,
+} from "tatefude-textarea";
 
 /** core の設定のうち、DOM 側の関心ごとを除いたもの */
 type StyleOptions = Omit<
@@ -25,7 +30,13 @@ export interface TextareaHandle {
   focus(): void;
   blur(): void;
   insertText(text: string): void;
+  /** 選択を切り取って返す */
+  cut(): string;
   selectAll(): void;
+  /** いま選ばれている文字列 */
+  readonly selectedText: string;
+  /** 選択の外接矩形。container 基準。選択が無ければ null */
+  readonly selectionRect: CaretRect | null;
   setSelection(anchor: number, focus?: number): void;
   undo(): void;
   redo(): void;

@@ -3,6 +3,7 @@ import type {
   BackendFactory,
   CaretRect,
   CompositionRange,
+  Handle,
   ViewState,
 } from "./backend/backend";
 import { HiddenInput } from "./input/hidden-input";
@@ -73,6 +74,8 @@ export class Textarea {
   private destroyed = false;
   /** className で足したぶん。差し替えと後片付けのために覚えておく */
   private ownClasses: string[] = [];
+  /** 選択の端につまみを出すか。指で触ったときだけ立てる */
+  private handles = false;
   private disposers: (() => void)[] = [];
 
   constructor(container: HTMLElement, options: TextareaOptions, createBackend: BackendFactory) {
@@ -108,6 +111,8 @@ export class Textarea {
       disabled: () => this.options.disabled,
       placeCaret: (caret, extend) => this.moveCaret(caret, extend),
       selectWord: (offset) => this.selectWord(offset),
+      showHandles: (show) => this.showHandles(show),
+      grabHandle: (edge) => this.grabHandle(edge),
       selectParagraph: (offset) => this.selectParagraph(offset),
       focus: () => this.input.focus(),
     });
@@ -156,6 +161,11 @@ export class Textarea {
 
   get selectedText(): string {
     return this.doc.selectedText;
+  }
+
+  /** 選択を切り取って返す。自前のメニューやボタンから使う */
+  cut(): string {
+    return this.handleCut();
   }
 
   insertText(text: string): void {
@@ -216,6 +226,12 @@ export class Textarea {
   }
 
   /** キャレットの居場所。container が原点 */
+  /** 選択の外接矩形。container 基準。選択が無ければ null */
+  get selectionRect(): CaretRect | null {
+    const [from, to] = this.range();
+    return this.backend.selectionRect(from, to);
+  }
+
   get caretRect(): CaretRect {
     return this.backend.caretRect(this.displayCaret());
   }
@@ -244,7 +260,24 @@ export class Textarea {
 
   // ---- 入力 ----
 
+  /** つまみの出し入れ。指で触ったら出し、打ったら引っ込める */
+  private showHandles(show: boolean): void {
+    if (this.handles === show) return;
+    this.handles = show;
+    this.sync();
+  }
+
+  /**
+   * つまみを掴んだ。動かす側を focus に、反対の端を anchor に置き直す。
+   * あとは伸ばすだけになるので、掴んだあとの扱いはドラッグと同じ
+   */
+  private grabHandle(handle: Handle): void {
+    const [from, to] = this.range();
+    this.setSelection(handle === "start" ? to : from, handle === "start" ? from : to);
+  }
+
   private handleInsert(raw: string): void {
+    this.handles = false;
     if (this.options.readOnly || this.options.disabled) return;
     const text = normalize(raw);
     if (!text) return;
@@ -285,6 +318,7 @@ export class Textarea {
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
+    this.handles = false;
     if (this.options.disabled) return;
     const command = commandFor(strokeOf(event), this.options.writingMode);
     if (!command) return;
@@ -475,6 +509,7 @@ export class Textarea {
       // 選択が伸びている間は出さない。textarea もそうなっている
       caretVisible: this.caretOn && this.anchor === this.caret.offset,
       focused: this.focused,
+      handles: this.handles && !this.composition,
       composition: this.compositionRange(),
       placeholder:
         this.text.length === 0 && !this.composition && this.options.placeholder

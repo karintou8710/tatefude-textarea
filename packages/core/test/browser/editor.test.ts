@@ -569,6 +569,185 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(Math.abs(center - finger)).toBeLessThan(36 / 2 + 1);
     });
 
+    it("選択の外接矩形が取れる", () => {
+      // 自前のメニューを選択の脇に出すのに要る
+      const { editor } = setup({ value: "吾輩は猫である。名前はまだ無い。".repeat(10) });
+      expect(editor.selectionRect).toBeNull();
+
+      editor.setSelection(10, 30);
+      const rect = editor.selectionRect;
+      if (!rect) throw new Error("選択しているのに矩形が無い");
+      expect(rect.width).toBeGreaterThan(0);
+      expect(rect.height).toBeGreaterThan(0);
+
+      // 両端のキャレットを含む
+      editor.setSelection(10);
+      const head = editor.caretRect;
+      editor.setSelection(30);
+      const tail = editor.caretRect;
+      for (const point of [head, tail]) {
+        expect(point.x).toBeGreaterThanOrEqual(rect.x - 1);
+        expect(point.x + point.width).toBeLessThanOrEqual(rect.x + rect.width + 1);
+        expect(point.y).toBeGreaterThanOrEqual(rect.y - 1);
+        expect(point.y + point.height).toBeLessThanOrEqual(rect.y + rect.height + 1);
+      }
+    });
+
+    it("長押しでキャレットを置き、そのまま引きずって動かせる", async () => {
+      // iOS の編集可能なテキストと同じ割り当て。単語選択はダブルタップ側に持たせる
+      const { container, editor, textarea } = setup({ value: "吾輩は猫である。".repeat(40) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      expect(document.activeElement).toBe(textarea);
+      const placed = editor.selection;
+      expect(placed.anchor).toBe(placed.focus);
+
+      // 掴んだままなぞると、キャレットが付いてくる (選択は伸びない)
+      pointer(container, "pointermove", {
+        clientX: at.clientX + 40,
+        clientY: at.clientY + 40,
+      });
+      pointer(container, "pointerup", { clientX: at.clientX + 40, clientY: at.clientY + 40 });
+      const moved = editor.selection;
+      expect(moved.anchor).toBe(moved.focus);
+      expect(moved.focus).not.toBe(placed.focus);
+    });
+
+    it("なぞっている間は長押しにならない", async () => {
+      const { container, editor, textarea } = setup({ value: "吾輩は猫である。".repeat(40) });
+      const at = middle(container);
+      const moved = { clientX: at.clientX - 40, clientY: at.clientY - 40 };
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointermove", moved);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      pointer(container, "pointerup", moved);
+
+      // なぞっただけ。キーボードも出さないし、キャレットも動かさない
+      expect(document.activeElement).not.toBe(textarea);
+      expect(editor.selection).toEqual({ anchor: 0, focus: 0 });
+    });
+
+    it("続けて 2 回叩くと単語、3 回で段落を選ぶ", () => {
+      // 合成マウスイベントは止めてあるので、ダブルクリックの detail は当てにできない
+      const { container, editor } = setup({ value: "吾輩は猫である。\nここで段落が変わる。" });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      expect(editor.selection.anchor).toBe(editor.selection.focus);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      const word = editor.selection;
+      expect(Math.abs(word.focus - word.anchor)).toBeGreaterThan(0);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      const paragraph = editor.selection;
+      expect(Math.abs(paragraph.focus - paragraph.anchor)).toBeGreaterThan(
+        Math.abs(word.focus - word.anchor),
+      );
+    });
+
+    it("単語を選んだまま引きずると伸びる", () => {
+      const { container, editor } = setup({ value: "吾輩は猫である。".repeat(40) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      pointer(container, "pointerdown", at);
+      const word = editor.selection;
+
+      pointer(container, "pointermove", { clientX: at.clientX + 50, clientY: at.clientY + 50 });
+      pointer(container, "pointerup", { clientX: at.clientX + 50, clientY: at.clientY + 50 });
+
+      const grown = editor.selection;
+      expect(grown.anchor).toBe(word.anchor);
+      expect(Math.abs(grown.focus - grown.anchor)).toBeGreaterThan(
+        Math.abs(word.focus - word.anchor),
+      );
+    });
+
+    it.runIf(ctor === DomTextarea)("つまみは選択の両端に出る", async () => {
+      const { container, editor } = setup({ value: "吾輩は猫である。名前はまだ無い。".repeat(10) });
+      const vertical = writingMode === "vertical-rl";
+      const at = middle(container);
+
+      // キャレットだけのときは出さない (iOS と同じ。丸が出るのは選択の端だけ)
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      await nextFrames();
+      expect(container.querySelectorAll("[data-handle]")).toHaveLength(0);
+
+      // 続けて叩いて単語を選ぶと、両端に 1 つずつ
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      await nextFrames();
+      const dots = [...container.querySelectorAll("[data-handle]")] as HTMLElement[];
+      expect(dots.map((el) => el.dataset.handle)).toEqual(["start", "end"]);
+
+      // 丸は棒から行送り方向の外側へ、半径ぶん押し出したところ
+      const { anchor, focus } = editor.selection;
+      const [from, to] = anchor <= focus ? [anchor, focus] : [focus, anchor];
+      const box = container.getBoundingClientRect();
+      const centerOf = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x + r.width / 2 - box.x, y: r.y + r.height / 2 - box.y };
+      };
+      const radius = 6;
+      // 測る前に控える。選択を畳むとつまみは消えてしまう
+      const [startDot, endDot] = [centerOf(dots[0]), centerOf(dots[1])];
+
+      editor.setSelection(from);
+      await nextFrames();
+      const head = editor.caretRect;
+      expect(startDot).toEqual(
+        vertical
+          ? { x: head.x + head.width + radius, y: head.y }
+          : { x: head.x, y: head.y - radius },
+      );
+
+      editor.setSelection(to);
+      await nextFrames();
+      const tail = editor.caretRect;
+      expect(endDot).toEqual(
+        vertical
+          ? { x: tail.x - radius, y: tail.y }
+          : { x: tail.x, y: tail.y + tail.height + radius },
+      );
+    });
+
+    it.runIf(ctor === DomTextarea)("選択の端のつまみを引くと、その端だけ動く", async () => {
+      // つまみは指の作法なので dom 経路だけが持つ
+      const { container, editor } = setup({ value: "吾輩は猫である。".repeat(40) });
+      const at = middle(container);
+
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      pointer(container, "pointerdown", at);
+      pointer(container, "pointerup", at);
+      await nextFrames();
+      const word = editor.selection;
+
+      const handle = container.querySelector('[data-handle="end"]') as HTMLElement | null;
+      if (!handle) throw new Error("つまみが描かれていない");
+      const box = handle.getBoundingClientRect();
+      const from = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+      const to = { clientX: from.clientX + 30, clientY: from.clientY + 30 };
+
+      pointer(container, "pointerdown", from);
+      pointer(container, "pointermove", to);
+      pointer(container, "pointerup", to);
+
+      // 掴んでいない側 (anchor) は動かない
+      const grown = editor.selection;
+      expect(grown.anchor).toBe(word.anchor);
+      expect(grown.focus).not.toBe(word.focus);
+    });
+
     it("器が縮んだら、隠し入力も中へ置き直す", async () => {
       // iOS はキーボードの下に取り残された入力を見つけると、開いた直後に閉じてしまう
       const { container, editor, textarea } = setup({ value: "あ".repeat(2000) });
@@ -675,10 +854,15 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 2000 }),
         );
       } else {
-        // 指のパンはブラウザが送る。こちらに届くのは「叩かなかった」ことだけ
-        pointer(container, "pointerdown", at);
-        pointer(container, "pointermove", { clientX: at.clientX - 80, clientY: at.clientY - 80 });
-        pointer(container, "pointerup", { clientX: at.clientX - 80, clientY: at.clientY - 80 });
+        // 指のパンはブラウザが送る。こちらに届くのは「叩かなかった」ことだけ。
+        // 叩いた場所から始めると、続けて叩いた扱い (単語を掴んで伸ばす) になる
+        const from = { clientX: at.clientX + 50, clientY: at.clientY + 50 };
+        pointer(container, "pointerdown", from);
+        pointer(container, "pointermove", {
+          clientX: from.clientX - 80,
+          clientY: from.clientY - 80,
+        });
+        pointer(container, "pointerup", { clientX: from.clientX - 80, clientY: from.clientY - 80 });
         editor.scrollOffset += 2000;
       }
 

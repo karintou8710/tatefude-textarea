@@ -1,7 +1,8 @@
 import type { Caret, Goal } from "../../model/movement";
 import type { ResolvedOptions } from "../../types";
-import type { Backend, CaretRect, ViewState } from "../backend";
+import type { Backend, CaretRect, Handle, ViewState } from "../backend";
 import { fontBoxSize } from "../font-box";
+import { grabsHandle, HANDLE_RADIUS, type HandlePoint, handleCenter } from "../handle";
 import * as axis from "./axis";
 import { DomScroller, type ScrollHost } from "./scroller";
 
@@ -176,6 +177,31 @@ export class DomBackend implements Backend {
   }
 
   /** canvas 版と揃えて、surface を原点にした矩形を返す。送り方向の厚みは持たない */
+  hitHandle(clientX: number, clientY: number): Handle | null {
+    const surface = this.surface.getBoundingClientRect();
+    const x = clientX - surface.x;
+    const y = clientY - surface.y;
+    for (const [edge, center] of this.handlePoints()) {
+      if (grabsHandle(center, x, y)) return edge;
+    }
+    return null;
+  }
+
+  /** つまみの中心 (surface 基準)。選択の両端に 1 つずつ */
+  private handlePoints(): [edge: Handle, center: HandlePoint][] {
+    const state = this.state;
+    if (!state?.handles || !state.focused) return [];
+    const { selection } = state;
+    // キャレットだけのときは出さない。掴めるのは選択の端だけ
+    if (selection.end === selection.start) return [];
+    const start = this.caretRect({ offset: selection.start, preferEnd: false });
+    const end = this.caretRect({ offset: selection.end, preferEnd: true });
+    return [
+      ["start", handleCenter(start, this.vertical, "start")],
+      ["end", handleCenter(end, this.vertical, "end")],
+    ];
+  }
+
   caretRect(caret: Caret): CaretRect {
     // 行を横切る向きの長さは字が入っている箱ぶん。行送りは含めない
     const breadth = fontBoxSize(this.container.ownerDocument, this.metrics.css, this.metrics.size);
@@ -194,6 +220,16 @@ export class DomBackend implements Backend {
     return this.vertical
       ? { x: at.x - breadth / 2 - surface.x, y: at.y - surface.y, width: breadth, height: 0 }
       : { x: at.x - surface.x, y: at.y - breadth / 2 - surface.y, width: 0, height: breadth };
+  }
+
+  selectionRect(start: number, end: number): CaretRect | null {
+    if (end <= start) return null;
+    const range = this.rangeFor(start, end);
+    if (!range) return null;
+    const box = range.getBoundingClientRect();
+    if (box.width === 0 && box.height === 0) return null;
+    const surface = this.surface.getBoundingClientRect();
+    return { x: box.x - surface.x, y: box.y - surface.y, width: box.width, height: box.height };
   }
 
   moveAcross(caret: Caret, direction: 1 | -1, goal: Goal): { caret: Caret; goal: Goal } {
@@ -751,6 +787,31 @@ export class DomBackend implements Backend {
         height: `${this.vertical ? thickness : rect.height}px`,
       } satisfies Partial<CSSStyleDeclaration>);
       this.caretLayer.appendChild(bar);
+    }
+
+    this.paintHandles(layer);
+  }
+
+  /** 選択の端に丸いつまみを描く。キャレットの棒の先に置く */
+  private paintHandles(layer: DOMRect): void {
+    const points = this.handlePoints();
+    if (points.length === 0) return;
+    const doc = this.container.ownerDocument;
+    const surface = this.surface.getBoundingClientRect();
+
+    for (const [edge, center] of points) {
+      const dot = doc.createElement("div");
+      dot.dataset.handle = edge;
+      Object.assign(dot.style, {
+        position: "absolute",
+        background: this.options.theme.caret,
+        borderRadius: "50%",
+        left: `${surface.x + center.x - layer.x - HANDLE_RADIUS}px`,
+        top: `${surface.y + center.y - layer.y - HANDLE_RADIUS}px`,
+        width: `${HANDLE_RADIUS * 2}px`,
+        height: `${HANDLE_RADIUS * 2}px`,
+      } satisfies Partial<CSSStyleDeclaration>);
+      this.caretLayer.appendChild(dot);
     }
   }
 }

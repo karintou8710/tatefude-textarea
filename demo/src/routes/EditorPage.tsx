@@ -5,6 +5,7 @@ import { Controls } from "./components/Controls";
 import { EditorPane } from "./components/EditorPane";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
+import { SelectionToolbar } from "./components/SelectionToolbar";
 import { useViewportHeight } from "./hooks/useViewportHeight";
 import { sampleText } from "./sample";
 import { defaultSettings, type Settings } from "./settings";
@@ -13,6 +14,7 @@ export function App() {
   const [value, setValue] = useState(sampleText);
   const [settings, setSettings] = useState(defaultSettings);
   const editorRef = useRef<TextareaHandle>(null);
+  const [selected, setSelected] = useState(false);
   useViewportHeight();
 
   const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...prev, ...patch }));
@@ -21,7 +23,14 @@ export function App() {
     <div className={styles.page}>
       <Header />
       <Controls settings={settings} onChange={update} onFocus={() => editorRef.current?.focus()} />
-      <EditorPane ref={editorRef} settings={settings} value={value} onChange={setValue} />
+      <EditorPane
+        ref={editorRef}
+        settings={settings}
+        value={value}
+        onChange={setValue}
+        onSelectionChange={(selection) => setSelected(selection.anchor !== selection.focus)}
+      />
+      <SelectionToolbar editor={editorRef.current} selected={selected} />
       <Footer count={value.length} writingMode={settings.writingMode} />
     </div>
   );

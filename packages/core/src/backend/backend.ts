@@ -13,6 +13,9 @@ export interface CaretRect {
   height: number;
 }
 
+/** 選択の端につくつまみ。潰れているときは出さない */
+export type Handle = "start" | "end";
+
 export interface CompositionRange {
   start: number;
   end: number;
@@ -29,6 +32,8 @@ export interface ViewState {
   caret: Caret;
   caretVisible: boolean;
   focused: boolean;
+  /** 選択の両端につまみを出すか。指で触ったときだけ出す */
+  handles: boolean;
   composition: CompositionRange | null;
   /** 本文が空のときだけ入る */
   placeholder: string | null;
@@ -51,8 +56,15 @@ export interface Layout {
 
   /** クライアント座標 → キャレット */
   hitTest(clientX: number, clientY: number): Caret;
+  /** そこにつまみがあるか。描いた側が答える */
+  hitHandle(clientX: number, clientY: number): Handle | null;
   /** キャレット → container 基準の矩形 */
   caretRect(caret: Caret): CaretRect;
+  /**
+   * 選択の外接矩形 (container 基準)。選択が無ければ null。
+   * 自前のメニューを選択の脇に出すのに要る
+   */
+  selectionRect(start: number, end: number): CaretRect | null;
 
   /** 行を移る。縦書きでは direction 1 が左 (次の行) */
   moveAcross(caret: Caret, direction: 1 | -1, goal: Goal): { caret: Caret; goal: Goal };
