@@ -1,6 +1,6 @@
 import type { Caret, Goal } from "../../model/movement";
 import type { ResolvedOptions } from "../../types";
-import type { Backend, CaretRect, ViewState } from "../backend";
+import type { Backend, CaretRect, Handle, ViewState } from "../backend";
 import { fontBoxSize } from "../font-box";
 import { readScroll, writeScroll } from "../scroll";
 import {
@@ -10,6 +10,7 @@ import {
   type Geometry,
   lineIndexOfOffset,
   offsetFromPoint,
+  selectionRects,
   totalBreadth,
 } from "./geometry";
 import { type Layout, layoutText } from "./layout";
@@ -145,8 +146,31 @@ export class CanvasBackend implements Backend {
     return { offset, preferEnd: line === lineIndexOfOffset(this.layout, offset, true) };
   }
 
+  /** 指で掴むつまみは dom 経路だけで持つ。canvas は出さない */
+  hitHandle(): Handle | null {
+    return null;
+  }
+
   caretRect(caret: Caret): CaretRect {
     return caretGeometry(this.layout, this.geometry, caret.offset, caret.preferEnd);
+  }
+
+  selectionRect(start: number, end: number): CaretRect | null {
+    const rects = selectionRects(this.layout, this.geometry, start, end);
+    if (rects.length === 0) return null;
+    let [left, top, right, bottom] = [
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ];
+    for (const rect of rects) {
+      left = Math.min(left, rect.x);
+      top = Math.min(top, rect.y);
+      right = Math.max(right, rect.x + rect.width);
+      bottom = Math.max(bottom, rect.y + rect.height);
+    }
+    return { x: left, y: top, width: right - left, height: bottom - top };
   }
 
   moveAcross(caret: Caret, direction: 1 | -1, goal: Goal): { caret: Caret; goal: Goal } {

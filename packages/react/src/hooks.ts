@@ -98,7 +98,14 @@ export function useEditorHandle(
       focus: () => editorRef.current?.focus(),
       blur: () => editorRef.current?.blur(),
       insertText: (text: string) => editorRef.current?.insertText(text),
+      cut: () => editorRef.current?.cut() ?? "",
       selectAll: () => editorRef.current?.selectAll(),
+      get selectedText() {
+        return editorRef.current?.selectedText ?? "";
+      },
+      get selectionRect() {
+        return editorRef.current?.selectionRect ?? null;
+      },
       setSelection: (anchor: number, focus?: number) =>
         editorRef.current?.setSelection(anchor, focus),
       undo: () => editorRef.current?.undo(),
