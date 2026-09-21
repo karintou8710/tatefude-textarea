@@ -1,7 +1,7 @@
 import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/canvas/index";
-import { DomTextarea } from "../../src/dom/index";
+import { CanvasTextarea } from "../../src/backend/canvas/index";
+import { DomTextarea } from "../../src/backend/dom/index";
 
 const SIZE = 20;
 const LINE_HEIGHT = 1.8;

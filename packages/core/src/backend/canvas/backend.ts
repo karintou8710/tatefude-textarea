@@ -1,7 +1,7 @@
+import type { Caret, Goal } from "../../model/movement";
+import type { ResolvedOptions } from "../../types";
 import type { Backend, CaretRect, ViewState } from "../backend";
-import type { Caret, Goal } from "../model/movement";
 import { readScroll, writeScroll } from "../scroll";
-import type { ResolvedOptions } from "../types";
 import {
   caretGeometry,
   contentBreadth,

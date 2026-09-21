@@ -1,5 +1,5 @@
-import type { Caret, Goal } from "./model/movement";
-import type { ResolvedOptions } from "./types";
+import type { Caret, Goal } from "../model/movement";
+import type { ResolvedOptions } from "../types";
 
 /**
  * container を基準にした、キャレットの居場所。

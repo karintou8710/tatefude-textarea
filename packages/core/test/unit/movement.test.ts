@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { contentLength, type Geometry } from "../../src/canvas/geometry";
-import { layoutText } from "../../src/canvas/layout";
-import { moveAcrossLines, movePage, moveToLineEdge } from "../../src/canvas/movement";
+import { contentLength, type Geometry } from "../../src/backend/canvas/geometry";
+import { layoutText } from "../../src/backend/canvas/layout";
+import { moveAcrossLines, movePage, moveToLineEdge } from "../../src/backend/canvas/movement";
 import { moveInline } from "../../src/model/movement";
 import { fakeMeasurer } from "../fake-measurer";
 

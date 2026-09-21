@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Layout, layoutText } from "../../src/canvas/layout";
+import { type Layout, layoutText } from "../../src/backend/canvas/layout";
 import { fakeMeasurer } from "../fake-measurer";
 
 const em = 10;

@@ -1,2 +1,2 @@
-export { DomBackend } from "./dom/backend";
-export { DomTextarea } from "./dom/index";
+export { DomBackend } from "./backend/dom/backend";
+export { DomTextarea } from "./backend/dom/index";

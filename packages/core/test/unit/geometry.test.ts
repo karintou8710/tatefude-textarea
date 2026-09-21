@@ -9,8 +9,8 @@ import {
   toLogical,
   toPhysical,
   totalBreadth,
-} from "../../src/canvas/geometry";
-import { layoutText } from "../../src/canvas/layout";
+} from "../../src/backend/canvas/geometry";
+import { layoutText } from "../../src/backend/canvas/layout";
 import { fakeMeasurer } from "../fake-measurer";
 
 const em = 10;

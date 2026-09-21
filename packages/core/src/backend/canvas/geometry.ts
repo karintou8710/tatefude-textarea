@@ -1,4 +1,4 @@
-import type { Padding, WritingMode } from "../types";
+import type { Padding, WritingMode } from "../../types";
 import type { Layout, LayoutLine } from "./layout";
 
 export interface Geometry {

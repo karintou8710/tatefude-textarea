@@ -1,4 +1,4 @@
-import type { FontStyle } from "../types";
+import type { FontStyle } from "../../types";
 import type { Orientation } from "./char-class";
 
 export interface Measurer {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/canvas/index";
-import { DomTextarea } from "../../src/dom/index";
+import { CanvasTextarea } from "../../src/backend/canvas/index";
+import { DomTextarea } from "../../src/backend/dom/index";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions, WritingMode } from "../../src/types";
 

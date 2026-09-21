@@ -1,4 +1,10 @@
-import type { Backend, BackendFactory, CaretRect, CompositionRange, ViewState } from "./backend";
+import type {
+  Backend,
+  BackendFactory,
+  CaretRect,
+  CompositionRange,
+  ViewState,
+} from "./backend/backend";
 import { HiddenInput } from "./input/hidden-input";
 import type { EditKind } from "./model/history";
 import { History } from "./model/history";

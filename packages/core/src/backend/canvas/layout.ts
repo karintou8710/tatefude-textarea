@@ -1,5 +1,5 @@
-import { type Grapheme, segmentGraphemes } from "../text/segment";
-import type { WritingMode } from "../types";
+import { type Grapheme, segmentGraphemes } from "../../text/segment";
+import type { WritingMode } from "../../types";
 import {
   isLatinWordChar,
   isLineEndForbidden,

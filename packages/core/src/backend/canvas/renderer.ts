@@ -1,6 +1,6 @@
+import type { Caret } from "../../model/movement";
+import type { ResolvedOptions } from "../../types";
 import type { CompositionRange } from "../backend";
-import type { Caret } from "../model/movement";
-import type { ResolvedOptions } from "../types";
 import { isSmallKana } from "./char-class";
 import type { Geometry, Rect } from "./geometry";
 import { caretGeometry, isVertical, selectionRects, toPhysical } from "./geometry";
