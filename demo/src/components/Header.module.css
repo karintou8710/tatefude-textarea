@@ -1,17 +1,41 @@
-.header h1 {
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+}
+
+.title {
   margin: 0;
   font-size: 20px;
   letter-spacing: 0.04em;
 }
 
-.lead {
-  margin: 4px 0 0;
-  color: var(--muted);
+.nav {
+  display: flex;
+  gap: 16px;
   font-size: 13px;
 }
 
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* 今いるページ。TanStack Router が data-status を付ける */
+.nav a[data-status="active"] {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* スマホでは本文だけ。行き来する道だけ細く残す */
 @media (max-width: 700px) {
-  .header {
+  .title {
     display: none;
+  }
+
+  .header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
   }
 }

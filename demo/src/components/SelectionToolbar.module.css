@@ -1,0 +1,33 @@
+/* 位置は floating-ui が入れる。ここは見た目だけ */
+.menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: light-dark(rgba(252, 252, 252, 0.98), rgba(58, 58, 60, 0.98));
+  box-shadow: 0 2px 10px rgb(0 0 0 / 25%);
+}
+
+.menu button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.menu button:disabled {
+  opacity: 0.35;
+}
+
+.menu button:active {
+  background: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.18));
+}

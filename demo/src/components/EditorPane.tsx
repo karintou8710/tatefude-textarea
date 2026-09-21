@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import type { Selection } from "tatefude-textarea";
 import { Textarea, type TextareaHandle } from "tatefude-textarea-react";
 import { usePrefersDark } from "../hooks/useColorScheme";
 import { editorStyle, type Settings } from "../settings";
@@ -9,10 +10,11 @@ interface Props {
   settings: Settings;
   value: string;
   onChange: (value: string) => void;
+  onSelectionChange?: (selection: Selection) => void;
   ref?: Ref<TextareaHandle>;
 }
 
-export function EditorPane({ settings, value, onChange, ref }: Props) {
+export function EditorPane({ settings, value, onChange, onSelectionChange, ref }: Props) {
   const dark = usePrefersDark();
 
   return (
@@ -26,6 +28,7 @@ export function EditorPane({ settings, value, onChange, ref }: Props) {
           placeholder="ここに書く"
           value={value}
           onChange={onChange}
+          onSelectionChange={onSelectionChange}
         />
       </div>
     </div>
