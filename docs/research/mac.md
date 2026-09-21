@@ -5,7 +5,7 @@
 - 割り当ては画面で見た向き。縦書きなら `↑↓` が字送り、`←→` が行送り
 - Linux / Windows の `<textarea>` と同じ。**macOS の `<textarea>` だけ**、縦書きでも `←→` が字送りのまま
   (矢印が OS のキーバインドから来るため)
-- 基準は `test/browser/native.test.ts`。本物を隣に置いて同じキーを打つ。chromium でだけ回る
+- 基準は `test/native.browser.test.ts`。本物を隣に置いて同じキーを打つ。chromium でだけ回る
 
 ## 修飾キー
 

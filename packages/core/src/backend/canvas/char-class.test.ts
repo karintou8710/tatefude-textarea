@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isLineEndForbidden,
-  isLineStartForbidden,
-  isSmallKana,
-  orientationOf,
-} from "../../src/backend/canvas/char-class";
+import { isLineEndForbidden, isLineStartForbidden, isSmallKana, orientationOf } from "./char-class";
 
 describe("orientationOf", () => {
   it("漢字と仮名は正立する", () => {

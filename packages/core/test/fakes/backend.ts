@@ -1,6 +1,6 @@
-import type { Backend, ViewState } from "../src/backend/backend";
-import type { Caret } from "../src/text/caret";
-import { fakeLayout } from "./fake-layout";
+import type { Backend, ViewState } from "../../src/backend/backend";
+import type { Caret } from "../../src/text/caret";
+import { fakeLayout } from "./layout";
 
 /**
  * 偽のバックエンド。**呼ばれた順を覚えるだけ**で、何も描かない。

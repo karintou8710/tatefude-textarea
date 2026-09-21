@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CaretBlink } from "../../src/backend/blink";
+import { CaretBlink } from "./blink";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

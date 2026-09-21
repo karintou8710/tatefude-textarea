@@ -73,7 +73,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   どこにキャレットが立つかは `geometry.ts` (折り返しの境目・二分探索・行末のぶら下がり)、
   縦横の入れ替えは `axis.ts`、要素と CSS は `styles.ts`、重ねる層は `renderer.ts`。
   `geometry.ts` と `axis.ts` は DOM を触らないので node のテストで回せる
-  (`test/fake-content.ts` に矩形だけ答えさせる)。
+  (`test/fakes/content.ts` に矩形だけ答えさせる)。
 - **両バックエンドは同じ名前で並べる。**`backend.ts` が繋ぎ、`geometry.ts` が位置を引き、
   `renderer.ts` が描き、`scroller.ts` が送る。
   canvas だけが `layout.ts` と `measure.ts` を持つ——自分で組版するから。
@@ -153,7 +153,7 @@ CSS には変更を知らせる口が無いので、変えた側が `refresh()` 
 **差し替えるためではなく、繋ぐ側が何に依っているかを見せるため**の型。
 
 **テストのために口を開けない。**組み立て (`apply` の順・通知の条件・`destroy`) は
-偽バックエンド + 本物の隠し入力で縛る (`test/browser/textarea.test.ts`)。
+偽バックエンド + 本物の隠し入力で縛る (`test/textarea.browser.test.ts`)。
 ブラウザなら本物が動くので、入力を偽装する口は要らない。
 順番そのものが覗けないものは、**着いた場所**で縛る
 (「描き直してから隠し入力を置く」は、隠し入力がいまのキャレットに乗っていることで見る)。
@@ -198,7 +198,7 @@ Linux / Windows の `<textarea>` と同じで、macOS の `<textarea>` とだけ
 (あちらは矢印が OS のキーバインドから来るので、縦書きでも `←→` が字送り)。
 
 **それ以外のキー操作は Blink の `<textarea>` を基準にする。**
-迷ったら `test/browser/native.test.ts` に本物の textarea を並べて測る。
+迷ったら `test/native.browser.test.ts` に本物の textarea を並べて測る。
 矢印は軸が入れ替わるので、こちらへ打つキーだけ `rotate()` で向きを直している。
 
 ## 言葉
@@ -219,17 +219,35 @@ Linux / Windows の `<textarea>` と同じで、macOS の `<textarea>` とだけ
 
 ## テスト
 
-- レイアウト・禁則・移動の判定は `test/unit` に node のテストとして書く。計測器は `test/fake-measurer.ts` を使う。
-- **DOM が要る部品は、判定を純粋な側に出してから `test/unit` で縛る。**
-  指の判定 (`gesture.test.ts`) がその形——閾値・回数・順番は node で測り、
-  ブラウザには「本当にその順で届くか」だけを残す。
-- 編集の操作・キー操作・表示の決めごとも `test/unit`。`edit/` は DOM を見ないので、
+**場所は「何を見ているか」、名前は「どこで走るか」。**別の軸なので、別々の所に書く。
+
+| | |
+| --- | --- |
+| `src/` の隣 (`input/gesture.test.ts`) | 単体。その 1 ファイルを見る |
+| `test/` 直下 | 通し。`textarea.ts` を叩いて組み立てを見る |
+| `*.test.ts` | node で走る |
+| `*.browser.test.ts` | chromium と webkit で走る |
+
+こうしておくと **「単体だがブラウザが要る」が素直に書ける**——本物の Range で測る
+`backend/dom/geometry.browser.test.ts` や、IME を受ける `input/hidden-input.browser.test.ts` は
+単体なのに node には落とせない。走る場所をディレクトリで決めると、これらは
+通しのテストに紛れ込むしかなくなる。
+
+- **判定は純粋な側に出してから隣で縛る。**指の判定 (`input/gesture.test.ts`) がその形——
+  閾値・回数・順番は node で測り、ブラウザには「本当にその順で届くか」だけを残す。
+  編集の操作・キー割り当て・表示の決めごとも同じで、`edit/` は DOM を見ないので
   変換の並び (開始 → 更新 → 確定) まで node で縛れる。
-  行を跨ぐものは `test/fake-layout.ts` に行の切れ目だけ答えさせる。
-  ブラウザを開かずに済むものは、ここで。
-- 入力・IME・キャレットは `test/browser` に書く。chromium と webkit の両方で回る。
-  - `editor.test.ts` … `describe.each` で両バックエンドを回す。追加すれば自動的に両方にかかる
-  - `parity.test.ts` … 2 つのバックエンドが同じところに着くことを縛る
-  - `native.test.ts` … Blink の `<textarea>` と突き合わせる。`userEvent` で本物のキーを打つ
-  - `textarea.test.ts` … 組み立て。偽バックエンド (`test/fake-backend.ts`) を渡し、
+- 偽物は `test/fakes/` に集める。計測器 (`measurer.ts`)、行の切れ目 (`layout.ts`)、
+  矩形だけ答える中身 (`content.ts`)、偽バックエンド (`backend.ts`)。
+- 通しは 5 つ。
+  - `editor.browser.test.ts` … `describe.each` で両バックエンドを回す。追加すれば自動的に両方にかかる
+  - `parity.browser.test.ts` … 2 つのバックエンドが同じところに着くことを縛る
+  - `native.browser.test.ts` … Blink の `<textarea>` と突き合わせる。`userEvent` で本物のキーを打つ
+  - `wrap.browser.test.ts` … 折り返しの境目
+  - `textarea.browser.test.ts` … 組み立て。偽バックエンド (`test/fakes/backend.ts`) を渡し、
     隠し入力と指は本物を動かす。**偽装するのは backend だけ**なので、node には落とせない
+- **自作したイベントは、ブラウザが作る値を持っていない。**`new PointerEvent(...)` の
+  `detail` は書いた本人の値なので、配線 (`event.detail` → `clicks`) はこれでは踏めない。
+  そこを見たいなら `userEvent` で本物を打つ。
+- **消したときに何が残るかを、テストごと見えるようにしておく。**`src/backend/dom` を
+  消せば dom のテストも一緒に消え、①②③ のテストは 1 つも動かない。

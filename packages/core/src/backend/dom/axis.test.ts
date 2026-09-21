@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Axis, Rect } from "../../src/backend/dom/axis";
-import * as axis from "../../src/backend/dom/axis";
+import type { Axis, Rect } from "./axis";
+import * as axis from "./axis";
 
 /** コンテナは 200x100、画面の (10, 20) に置いてある */
 const layer: Rect = { x: 10, y: 20, width: 200, height: 100 };

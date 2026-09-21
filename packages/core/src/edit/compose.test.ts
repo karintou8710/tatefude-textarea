@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { beginComposition, endComposition, updateComposition } from "../../src/edit/compose";
-import { setSelection } from "../../src/edit/selection";
-import { reset } from "../../src/edit/text";
-import { type EditState, type Limits, newEditState } from "../../src/state/edit";
-import { composing, displayCaret, viewContent } from "../../src/state/query";
+import { type EditState, type Limits, newEditState } from "../state/edit";
+import { composing, displayCaret, viewContent } from "../state/query";
+import { beginComposition, endComposition, updateComposition } from "./compose";
+import { setSelection } from "./selection";
+import { reset } from "./text";
 
 const open: Limits = { editable: true, maxLength: Number.POSITIVE_INFINITY };
 const locked: Limits = { editable: false, maxLength: Number.POSITIVE_INFINITY };

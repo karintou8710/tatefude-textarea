@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { contentLength, type Geometry } from "../../src/backend/canvas/geometry";
-import { layoutText } from "../../src/backend/canvas/layout";
-import { moveAcrossLines, moveToLineEdge } from "../../src/backend/canvas/movement";
-import { moveInline } from "../../src/text/move";
-import { fakeMeasurer } from "../fake-measurer";
+import { fakeMeasurer } from "../../../test/fakes/measurer";
+import { moveInline } from "../../text/move";
+import { contentLength, type Geometry } from "./geometry";
+import { layoutText } from "./layout";
+import { moveAcrossLines, moveToLineEdge } from "./movement";
 
 const em = 10;
 const geometry: Geometry = {

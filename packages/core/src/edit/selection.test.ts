@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { newEditState } from "../state/edit";
+import { range, selectedText, selection } from "../state/query";
 import {
   grabHandle,
   moveCaret,
@@ -6,9 +8,7 @@ import {
   selectParagraph,
   selectWord,
   setSelection,
-} from "../../src/edit/selection";
-import { newEditState } from "../../src/state/edit";
-import { range, selectedText, selection } from "../../src/state/query";
+} from "./selection";
 
 describe("選択の持ち方", () => {
   it("掴んだ側と動く側で持ち、range は前後に揃える", () => {

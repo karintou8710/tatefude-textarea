@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DomTextarea } from "../../src/dom";
-import { Textarea } from "../../src/textarea";
-import type { TextareaOptions } from "../../src/types";
-import { fakeBackend } from "../fake-backend";
+import { DomTextarea } from "../src/dom";
+import { Textarea } from "../src/textarea";
+import type { TextareaOptions } from "../src/types";
+import { fakeBackend } from "./fakes/backend";
 import { applyStyle } from "./style";
 
 /**

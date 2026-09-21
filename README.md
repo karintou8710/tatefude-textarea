@@ -84,7 +84,7 @@ function Editor() {
 macOS だけは矢印が OS のキーバインドから来るため、縦書きでも `←` `→` が字送りのままで、
 **そこだけ合わせていない。**
 着く先は合わせてあり、縦書きの textarea を隣に置いて同じ意味のキーを打ち、offset を突き合わせている
-([native.test.ts](packages/core/test/browser/native.test.ts))。
+([native.browser.test.ts](packages/core/test/native.browser.test.ts))。
 
 以下は縦書きのとき。横書きでは `↑` `↓` と `←` `→` が入れ替わる。
 

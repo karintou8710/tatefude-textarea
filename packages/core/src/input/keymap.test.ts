@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Command } from "../../src/edit/command";
-import { commandFor, type KeyStroke } from "../../src/input/keymap";
-import type { WritingMode } from "../../src/types";
+import type { Command } from "../edit/command";
+import type { WritingMode } from "../types";
+import { commandFor, type KeyStroke } from "./keymap";
 
 function press(key: string, mods: Partial<Omit<KeyStroke, "key">> = {}) {
   return { key, accel: false, shift: false, alt: false, ...mods };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { paragraphEdge } from "../../src/text/move";
-import { paragraphRangeAt, wordRangeAt } from "../../src/text/range";
+import { paragraphEdge } from "./move";
+import { paragraphRangeAt, wordRangeAt } from "./range";
 
 describe("語", () => {
   it("突いた場所に乗っている語を取る", () => {

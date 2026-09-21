@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildViewState } from "../../src/backend/view-state";
-import type { ViewContent } from "../../src/state/query";
-import type { ScreenState } from "../../src/state/screen";
+import type { ViewContent } from "../state/query";
+import type { ScreenState } from "../state/screen";
+import { buildViewState } from "./view-state";
 
 function content(partial: Partial<ViewContent> = {}): ViewContent {
   return {

@@ -67,5 +67,5 @@ OS のキーバインドが先に効いていて、この経路を通ってい�
 
 ## 測り方
 
-`test/browser/native.test.ts` と同じ形。`<textarea>` を置いて `userEvent` で本物のキーを打ち、
+`test/native.browser.test.ts` と同じ形。`<textarea>` を置いて `userEvent` で本物のキーを打ち、
 `selectionStart` を読む。webkit を含めて回せば、この表はそのまま再現できる。

@@ -1,5 +1,5 @@
-import type { Lines } from "../src/backend/backend";
-import type { Caret, Goal } from "../src/text/caret";
+import type { Lines } from "../../src/backend/backend";
+import type { Caret, Goal } from "../../src/text/caret";
 
 interface Line {
   start: number;

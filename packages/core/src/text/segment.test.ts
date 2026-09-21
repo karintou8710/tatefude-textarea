@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { segmentGraphemes, stepGrapheme, stepWord } from "../../src/text/segment";
+import { segmentGraphemes, stepGrapheme, stepWord } from "./segment";
 
 describe("segmentGraphemes", () => {
   it("元テキストのオフセットを付ける", () => {

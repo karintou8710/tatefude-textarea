@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fakeMeasurer } from "../../../test/fakes/measurer";
 import {
   caretGeometry,
   contentLength,
@@ -9,9 +10,8 @@ import {
   toLogical,
   toPhysical,
   totalBreadth,
-} from "../../src/backend/canvas/geometry";
-import { layoutText } from "../../src/backend/canvas/layout";
-import { fakeMeasurer } from "../fake-measurer";
+} from "./geometry";
+import { layoutText } from "./layout";
 
 const em = 10;
 const measurer = fakeMeasurer(em);

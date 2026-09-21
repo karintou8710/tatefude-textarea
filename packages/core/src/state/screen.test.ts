@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newScreenState, setFocused, showHandles } from "../../src/state/screen";
+import { newScreenState, setFocused, showHandles } from "./screen";
 
 describe("画面の状態", () => {
   it("動かなければ同じものを返す。描き直しを省くため", () => {

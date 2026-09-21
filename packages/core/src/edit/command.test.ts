@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { runCommand } from "../../src/edit/command";
-import { setSelection } from "../../src/edit/selection";
-import { type EditState, type Limits, newEditState } from "../../src/state/edit";
-import { selection } from "../../src/state/query";
-import { fakeLayout } from "../fake-layout";
+import { fakeLayout } from "../../test/fakes/layout";
+import { type EditState, type Limits, newEditState } from "../state/edit";
+import { selection } from "../state/query";
+import { runCommand } from "./command";
+import { setSelection } from "./selection";
 
 const open: Limits = { editable: true, maxLength: Number.POSITIVE_INFINITY };
 const locked: Limits = { editable: false, maxLength: Number.POSITIVE_INFINITY };

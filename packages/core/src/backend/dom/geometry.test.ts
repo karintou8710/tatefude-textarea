@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ViewState } from "../../src/backend/backend";
-import type { Rect } from "../../src/backend/dom/axis";
-import * as geometry from "../../src/backend/dom/geometry";
-import { fakeContent } from "../fake-content";
+import { fakeContent } from "../../../test/fakes/content";
+import type { ViewState } from "../backend";
+import type { Rect } from "./axis";
+import * as geometry from "./geometry";
 
 /** 5 字で折り返す 2 行。0 行目が 0〜4、1 行目が 5〜9 */
 const TWO_LINES = "あいうえおかきくけこ";

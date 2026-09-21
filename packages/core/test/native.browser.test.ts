@@ -1,10 +1,10 @@
 import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
-import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
-import { CanvasTextarea } from "../../src/canvas";
-import { DomTextarea } from "../../src/dom";
-import type { Textarea } from "../../src/textarea";
-import type { TextareaOptions } from "../../src/types";
+import type { CanvasStyleOptions } from "../src/backend/canvas/style";
+import { CanvasTextarea } from "../src/canvas";
+import { DomTextarea } from "../src/dom";
+import type { Textarea } from "../src/textarea";
+import type { TextareaOptions } from "../src/types";
 import { applyStyle, canvasStyle } from "./style";
 
 /**

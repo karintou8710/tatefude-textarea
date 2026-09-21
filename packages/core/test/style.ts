@@ -1,5 +1,5 @@
-import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
-import { defaultFont } from "../../src/backend/canvas/style";
+import type { CanvasStyleOptions } from "../src/backend/canvas/style";
+import { defaultFont } from "../src/backend/canvas/style";
 
 /**
  * 見た目の指定は 2 つの経路に分かれた。

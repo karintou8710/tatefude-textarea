@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { setSelection } from "../../src/edit/selection";
-import { newEditState } from "../../src/state/edit";
-import { viewContent } from "../../src/state/query";
+import { setSelection } from "../edit/selection";
+import { newEditState } from "./edit";
+import { viewContent } from "./query";
 
 describe("画面に出す中身", () => {
   it("選択が潰れているかを伝える", () => {

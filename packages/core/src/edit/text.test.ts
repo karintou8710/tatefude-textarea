@@ -1,17 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { breakCoalescing, setSelection } from "../../src/edit/selection";
-import {
-  cut,
-  deleteBy,
-  deleteSelection,
-  insert,
-  insertAt,
-  redo,
-  reset,
-  undo,
-} from "../../src/edit/text";
-import { type EditState, type Limits, newEditState } from "../../src/state/edit";
-import { selection } from "../../src/state/query";
+import { type EditState, type Limits, newEditState } from "../state/edit";
+import { selection } from "../state/query";
+import { breakCoalescing, setSelection } from "./selection";
+import { cut, deleteBy, deleteSelection, insert, insertAt, redo, reset, undo } from "./text";
 
 const open: Limits = { editable: true, maxLength: Number.POSITIVE_INFINITY };
 const locked: Limits = { editable: false, maxLength: Number.POSITIVE_INFINITY };

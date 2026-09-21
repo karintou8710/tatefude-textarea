@@ -5,7 +5,7 @@ import {
   newGestureState,
   onPointer,
   type PointerInput,
-} from "../../src/input/gesture";
+} from "./gesture";
 
 /** 出来事を順に流して、最後の状態と、出たことを全部集める */
 function play(inputs: PointerInput[], from: GestureState = newGestureState) {

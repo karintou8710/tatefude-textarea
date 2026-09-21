@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { Backend } from "../../src/backend/backend";
-import { CanvasBackend } from "../../src/backend/canvas/backend";
-import { resolveCanvasStyle } from "../../src/backend/canvas/style";
-import { DomBackend } from "../../src/backend/dom/backend";
-import { Textarea } from "../../src/textarea";
-import { resolveOptions, type TextareaOptions } from "../../src/types";
+import type { Backend } from "../src/backend/backend";
+import { CanvasBackend } from "../src/backend/canvas/backend";
+import { resolveCanvasStyle } from "../src/backend/canvas/style";
+import { DomBackend } from "../src/backend/dom/backend";
+import { Textarea } from "../src/textarea";
+import { resolveOptions, type TextareaOptions } from "../src/types";
 import { applyStyle, canvasStyle } from "./style";
 
 /**

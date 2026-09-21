@@ -1,6 +1,6 @@
-import type { Axis, Rect } from "../src/backend/dom/axis";
-import type { Content } from "../src/backend/dom/geometry";
-import { sentinelFor } from "../src/backend/dom/geometry";
+import type { Axis, Rect } from "../../src/backend/dom/axis";
+import type { Content } from "../../src/backend/dom/geometry";
+import { sentinelFor } from "../../src/backend/dom/geometry";
 
 const LINE_HEIGHT = 30;
 /** 全角 1 字ぶんの送り */
