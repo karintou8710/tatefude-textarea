@@ -111,8 +111,8 @@ async function traceOurs(
   const steps: string[] = [];
   for (const stroke of keys) {
     await userEvent.keyboard(rotate(stroke));
-    const { anchor, focus } = target.editor.state.selection;
-    steps.push(`${stroke} [${Math.min(anchor, focus)},${Math.max(anchor, focus)}]`);
+    const { anchor, head } = target.editor.state.selection;
+    steps.push(`${stroke} [${Math.min(anchor, head)},${Math.max(anchor, head)}]`);
   }
   return steps;
 }

@@ -89,10 +89,10 @@ describe.runIf(server.platform === "darwin")("折り返す位置をネイティ�
       const base = await lineEnds(() => el.selectionStart, el);
 
       const c = ours(CanvasTextarea, value);
-      expect(await lineEnds(() => c.editor.state.selection.focus, c.textarea)).toEqual(base);
+      expect(await lineEnds(() => c.editor.state.selection.head, c.textarea)).toEqual(base);
 
       const d = ours(DomTextarea, value);
-      expect(await lineEnds(() => d.editor.state.selection.focus, d.textarea)).toEqual(base);
+      expect(await lineEnds(() => d.editor.state.selection.head, d.textarea)).toEqual(base);
     },
     30000,
   );

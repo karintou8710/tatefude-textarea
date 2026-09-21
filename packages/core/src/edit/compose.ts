@@ -13,7 +13,7 @@ export function beginComposition(state: EditState, limits: Limits): Result {
     state: {
       ...cleared.state,
       history: history.breakCoalescing(cleared.state.history),
-      composition: composition.begin(cleared.state.caret.offset),
+      composition: composition.begin(cleared.state.head.offset),
     },
     changed: cleared.changed ?? "view",
   };

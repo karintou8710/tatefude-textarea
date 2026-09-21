@@ -7,11 +7,11 @@ import { paragraphRangeAt, wordRangeAt } from "../text/range";
 
 /** 選ぶ・動かす操作。本文は触らない */
 
-export function setSelection(state: EditState, anchor: number, focus = anchor): Result {
+export function setSelection(state: EditState, anchor: number, head = anchor): Result {
   return {
     state: {
       ...state,
-      ...place(state.text, { anchor, focus }),
+      ...place(state.text, { anchor, head }),
       history: history.breakCoalescing(state.history),
     },
     changed: "selection",
@@ -25,16 +25,16 @@ export function selectAll(state: EditState): Result {
 /** キャレットを動かす。extend なら掴んだ側を置いたまま伸ばす */
 export function moveCaret(
   state: EditState,
-  caret: Caret,
+  head: Caret,
   extend: boolean,
   goal: Goal = null,
 ): Result {
   return {
     state: {
       ...state,
-      caret,
+      head,
       goal,
-      anchor: extend ? state.anchor : caret.offset,
+      anchor: extend ? state.anchor : head.offset,
       history: history.breakCoalescing(state.history),
     },
     changed: "selection",
@@ -52,7 +52,7 @@ export function selectParagraph(state: EditState, offset: number): Result {
 }
 
 /**
- * つまみを掴んだ。動かす側を focus に、反対の端を anchor に置き直す。
+ * つまみを掴んだ。動かす側を head に、反対の端を anchor に置き直す。
  * あとは伸ばすだけになるので、掴んだあとの扱いはドラッグと同じ
  */
 export function grabHandle(state: EditState, handle: Handle): Result {

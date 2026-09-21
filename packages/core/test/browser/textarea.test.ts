@@ -62,7 +62,7 @@ describe("動いたあとの後始末", () => {
     const { textarea } = setup({ onChange, onSelectionChange });
     textarea.commands.setSelection(1, 3);
     expect(onChange).not.toHaveBeenCalled();
-    expect(onSelectionChange).toHaveBeenCalledWith({ anchor: 1, focus: 3 });
+    expect(onSelectionChange).toHaveBeenCalledWith({ anchor: 1, head: 3 });
   });
 
   it("何も動かなければ描き直さない。点滅を飛ばさないため", () => {

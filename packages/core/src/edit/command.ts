@@ -39,7 +39,7 @@ export function runCommand(
       return stepInline(state, command.direction, command.word, command.extend);
 
     case "lineEdge":
-      return moveCaret(state, lines.lineEdge(state.caret, command.edge), command.extend);
+      return moveCaret(state, lines.lineEdge(state.head, command.edge), command.extend);
 
     case "docEdge":
       return moveCaret(
@@ -53,12 +53,12 @@ export function runCommand(
     case "paragraphEdge":
       return moveCaret(
         state,
-        paragraphEdge(state.text, state.caret.offset, command.direction),
+        paragraphEdge(state.text, state.head.offset, command.direction),
         command.extend,
       );
 
     case "moveAcross": {
-      const moved = lines.moveAcross(state.caret, command.direction, state.goal);
+      const moved = lines.moveAcross(state.head, command.direction, state.goal);
       return moveCaret(state, moved.caret, command.extend, moved.goal);
     }
 
@@ -93,20 +93,20 @@ function stepInline(state: EditState, direction: 1 | -1, byWord: boolean, extend
   if (!extend && !byWord && from !== to) {
     return moveCaret(
       state,
-      { offset: direction === 1 ? to : from, preferEnd: state.caret.preferEnd },
+      { offset: direction === 1 ? to : from, preferEnd: state.head.preferEnd },
       false,
     );
   }
 
-  const next = moveInline(state.text, state.caret, direction, byWord);
+  const next = moveInline(state.text, state.head, direction, byWord);
   // 端に着いていて動けないなら何もしない。行を移るときの狙いも消さずに残す
   const anchor = extend ? state.anchor : next.offset;
-  if (next.offset === state.caret.offset && anchor === state.anchor) return unchanged(state);
+  if (next.offset === state.head.offset && anchor === state.anchor) return unchanged(state);
   return moveCaret(state, next, extend);
 }
 
 function movePage(state: EditState, lines: Lines, direction: 1 | -1): { caret: Caret; goal: Goal } {
-  let moved = { caret: state.caret, goal: state.goal };
+  let moved = { caret: state.head, goal: state.goal };
   for (let i = 0; i < lines.linesPerPage(); i++) {
     moved = lines.moveAcross(moved.caret, direction, moved.goal);
   }

@@ -133,12 +133,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup();
       type(textarea, "吾輩は猫");
       expect(editor.state.value).toBe("吾輩は猫");
-      expect(editor.state.selection).toEqual({ anchor: 4, focus: 4 });
+      expect(editor.state.selection).toEqual({ anchor: 4, head: 4 });
     });
 
     it("最初のキャレットは文頭に置く", () => {
       const { editor } = setup({ value: "あいう" });
-      expect(editor.state.selection).toEqual({ anchor: 0, focus: 0 });
+      expect(editor.state.selection).toEqual({ anchor: 0, head: 0 });
     });
 
     it("Enter の直後は次の行の頭にキャレットが来る", () => {
@@ -215,7 +215,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(1);
       compose(textarea, "にほんご", "日本語");
       expect(editor.state.value).toBe("「日本語");
-      expect(editor.state.selection).toEqual({ anchor: 4, focus: 4 });
+      expect(editor.state.selection).toEqual({ anchor: 4, head: 4 });
     });
 
     it("変換中は本文がまだ変わらない", () => {
@@ -253,9 +253,9 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup({ value: "あいう" });
       editor.commands.setSelection(0);
       key(textarea, nextChar);
-      expect(editor.state.selection.focus).toBe(1);
+      expect(editor.state.selection.head).toBe(1);
       key(textarea, prevChar);
-      expect(editor.state.selection.focus).toBe(0);
+      expect(editor.state.selection.head).toBe(0);
     });
 
     it("行送りは行を移る", () => {
@@ -266,12 +266,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       // 何文字目で折り返すかは実フォントの送り次第。
       // canvas 版は全角を 1em と決め打つが、dom 版はフォントの縦送りに従う
-      const landed = editor.state.selection.focus;
+      const landed = editor.state.selection.head;
       expect(landed).toBeGreaterThan(0);
       expect(landed).toBeLessThan(400);
 
       key(textarea, prevLine);
-      expect(editor.state.selection.focus).toBe(0);
+      expect(editor.state.selection.head).toBe(0);
     });
 
     it("選んでいるときの字送りは選んだ端に畳む", () => {
@@ -279,16 +279,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup({ value: "あいうえお" });
       editor.commands.setSelection(1, 3);
       key(textarea, prevChar);
-      expect(editor.state.selection).toEqual({ anchor: 1, focus: 1 });
+      expect(editor.state.selection).toEqual({ anchor: 1, head: 1 });
 
       editor.commands.setSelection(1, 3);
       key(textarea, nextChar);
-      expect(editor.state.selection).toEqual({ anchor: 3, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 3, head: 3 });
 
       // 逆向きに選んでいても、着くのは選んだ端
       editor.commands.setSelection(3, 1);
       key(textarea, nextChar);
-      expect(editor.state.selection).toEqual({ anchor: 3, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 3, head: 3 });
     });
 
     it("端で止まった字送りは行を移るときの狙いを消さない", () => {
@@ -296,12 +296,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup({ value: "あいう\nかきく" });
       editor.commands.setSelection(1);
       key(textarea, prevLine);
-      expect(editor.state.selection.focus).toBe(0);
+      expect(editor.state.selection.head).toBe(0);
 
       // 文頭では動けない。ここで狙いを捨てると、次の行送りが行頭に落ちてしまう
       key(textarea, prevChar);
       key(textarea, nextLine);
-      expect(editor.state.selection.focus).toBe(5);
+      expect(editor.state.selection.head).toBe(5);
     });
 
     it("折り返しの境目に着いたキャレットは次の行の先頭に居る", () => {
@@ -310,16 +310,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       // 何文字目で折り返すかはフォント次第なので、行送りで境目を探す
       editor.commands.setSelection(2);
       key(textarea, nextLine);
-      const wrap = editor.state.selection.focus;
+      const wrap = editor.state.selection.head;
       expect(wrap).toBeGreaterThan(2);
 
       editor.commands.setSelection(wrap - 1);
       key(textarea, nextChar);
-      expect(editor.state.selection.focus).toBe(wrap);
+      expect(editor.state.selection.head).toBe(wrap);
 
       // 前の行の末尾に居ると、短い 1 行目まで落ちて 1 になってしまう
       key(textarea, prevLine);
-      expect(editor.state.selection.focus).toBe(2);
+      expect(editor.state.selection.head).toBe(2);
     });
 
     it.runIf(ctor === DomTextarea)("ブラウザが行送りを丸めても本文からずれない", () => {
@@ -381,7 +381,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(0);
       key(textarea, nextChar, { shiftKey: true });
       key(textarea, nextChar, { shiftKey: true });
-      expect(editor.state.selection).toEqual({ anchor: 0, focus: 2 });
+      expect(editor.state.selection).toEqual({ anchor: 0, head: 2 });
     });
 
     it("修飾キー付きの行送りで文頭と文末へ飛ぶ", () => {
@@ -389,9 +389,9 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup({ value: "あいう" });
       editor.commands.setSelection(1);
       key(textarea, nextLine, { metaKey: true });
-      expect(editor.state.selection.focus).toBe(3);
+      expect(editor.state.selection.head).toBe(3);
       key(textarea, prevLine, { metaKey: true });
-      expect(editor.state.selection.focus).toBe(0);
+      expect(editor.state.selection.head).toBe(0);
     });
 
     it("Option 付きの行送りで段落の端へ飛ぶ", () => {
@@ -399,10 +399,10 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup({ value: "あい\nうえお\nかき" });
       editor.commands.setSelection(4);
       key(textarea, prevLine, { altKey: true });
-      expect(editor.state.selection.focus).toBe(3);
+      expect(editor.state.selection.head).toBe(3);
       // 段落の頭に居るときは、その段落の末まで
       key(textarea, nextLine, { altKey: true });
-      expect(editor.state.selection.focus).toBe(6);
+      expect(editor.state.selection.head).toBe(6);
     });
 
     it("画面に入っていない行へも移れる", () => {
@@ -411,9 +411,9 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(0);
       key(textarea, "PageDown");
 
-      const focus = editor.state.selection.focus;
-      expect(focus).toBeGreaterThan(0);
-      expect(focus).toBeLessThan(400);
+      const head = editor.state.selection.head;
+      expect(head).toBeGreaterThan(0);
+      expect(head).toBeLessThan(400);
     });
 
     it("行送りを繰り返しても文末へ飛ばない", () => {
@@ -424,7 +424,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const seen: number[] = [];
       for (let i = 0; i < 8; i++) {
         key(textarea, nextLine);
-        seen.push(editor.state.selection.focus);
+        seen.push(editor.state.selection.head);
       }
 
       // 行ごとに進むだけ。順番も崩れない
@@ -439,7 +439,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(1);
       key(textarea, prevLine);
       key(textarea, "Home");
-      expect(editor.state.selection.focus).toBe(0);
+      expect(editor.state.selection.head).toBe(0);
     });
 
     it.each(["", "\n", "\n\n\n", "あい\n", "\nあい", "あ"])(
@@ -459,8 +459,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           "PageDown",
         ]) {
           key(textarea, name);
-          expect(editor.state.selection.focus).toBeGreaterThanOrEqual(0);
-          expect(editor.state.selection.focus).toBeLessThanOrEqual(value.length);
+          expect(editor.state.selection.head).toBeGreaterThanOrEqual(0);
+          expect(editor.state.selection.head).toBeLessThanOrEqual(value.length);
         }
       },
     );
@@ -468,7 +468,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("全選択できる", () => {
       const { editor, textarea } = setup({ value: "あいう" });
       key(textarea, "a", { metaKey: true });
-      expect(editor.state.selection).toEqual({ anchor: 0, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 0, head: 3 });
     });
   });
 
@@ -494,7 +494,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerup", at);
 
       expect(document.activeElement).toBe(textarea);
-      expect(editor.state.selection.focus).toBeGreaterThan(0);
+      expect(editor.state.selection.head).toBeGreaterThan(0);
     });
 
     it("ブラウザがスクロールを取ったら叩いた扱いにしない", () => {
@@ -514,7 +514,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       pointer(container, "pointerdown", { ...at, pointerType: "mouse" });
       expect(document.activeElement).toBe(textarea);
-      expect(editor.state.selection.focus).toBeGreaterThan(0);
+      expect(editor.state.selection.head).toBeGreaterThan(0);
     });
 
     it("叩いた場所はコンテナが縮んでも動かない", async () => {
@@ -602,7 +602,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       await new Promise((resolve) => setTimeout(resolve, 600));
       expect(document.activeElement).toBe(textarea);
       const placed = editor.state.selection;
-      expect(placed.anchor).toBe(placed.focus);
+      expect(placed.anchor).toBe(placed.head);
 
       // 掴んだままなぞると、キャレットが付いてくる (選択は伸びない)
       pointer(container, "pointermove", {
@@ -611,8 +611,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       });
       pointer(container, "pointerup", { clientX: at.clientX + 40, clientY: at.clientY + 40 });
       const moved = editor.state.selection;
-      expect(moved.anchor).toBe(moved.focus);
-      expect(moved.focus).not.toBe(placed.focus);
+      expect(moved.anchor).toBe(moved.head);
+      expect(moved.head).not.toBe(placed.head);
     });
 
     it("なぞっている間は長押しにならない", async () => {
@@ -627,7 +627,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       // なぞっただけ。キーボードも出さないし、キャレットも動かさない
       expect(document.activeElement).not.toBe(textarea);
-      expect(editor.state.selection).toEqual({ anchor: 0, focus: 0 });
+      expect(editor.state.selection).toEqual({ anchor: 0, head: 0 });
     });
 
     it("続けて 2 回叩くと単語、3 回で段落を選ぶ", () => {
@@ -637,18 +637,18 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
-      expect(editor.state.selection.anchor).toBe(editor.state.selection.focus);
+      expect(editor.state.selection.anchor).toBe(editor.state.selection.head);
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
       const word = editor.state.selection;
-      expect(Math.abs(word.focus - word.anchor)).toBeGreaterThan(0);
+      expect(Math.abs(word.head - word.anchor)).toBeGreaterThan(0);
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
       const paragraph = editor.state.selection;
-      expect(Math.abs(paragraph.focus - paragraph.anchor)).toBeGreaterThan(
-        Math.abs(word.focus - word.anchor),
+      expect(Math.abs(paragraph.head - paragraph.anchor)).toBeGreaterThan(
+        Math.abs(word.head - word.anchor),
       );
     });
 
@@ -666,8 +666,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       const grown = editor.state.selection;
       expect(grown.anchor).toBe(word.anchor);
-      expect(Math.abs(grown.focus - grown.anchor)).toBeGreaterThan(
-        Math.abs(word.focus - word.anchor),
+      expect(Math.abs(grown.head - grown.anchor)).toBeGreaterThan(
+        Math.abs(word.head - word.anchor),
       );
     });
 
@@ -690,8 +690,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(dots.map((el) => el.dataset.handle)).toEqual(["start", "end"]);
 
       // 丸は棒から行送り方向の外側へ、半径ぶん押し出したところ
-      const { anchor, focus } = editor.state.selection;
-      const [from, to] = anchor <= focus ? [anchor, focus] : [focus, anchor];
+      const { anchor, head } = editor.state.selection;
+      const [from, to] = anchor <= head ? [anchor, head] : [head, anchor];
       const box = container.getBoundingClientRect();
       const centerOf = (el: HTMLElement) => {
         const r = el.getBoundingClientRect();
@@ -703,20 +703,20 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       editor.commands.setSelection(from);
       await nextFrames();
-      const head = editor.caretRect;
+      const startBar = editor.caretRect;
       expect(startDot).toEqual(
         vertical
-          ? { x: head.x + head.width + radius, y: head.y }
-          : { x: head.x, y: head.y - radius },
+          ? { x: startBar.x + startBar.width + radius, y: startBar.y }
+          : { x: startBar.x, y: startBar.y - radius },
       );
 
       editor.commands.setSelection(to);
       await nextFrames();
-      const tail = editor.caretRect;
+      const endBar = editor.caretRect;
       expect(endDot).toEqual(
         vertical
-          ? { x: tail.x - radius, y: tail.y }
-          : { x: tail.x, y: tail.y + tail.height + radius },
+          ? { x: endBar.x - radius, y: endBar.y }
+          : { x: endBar.x, y: endBar.y + endBar.height + radius },
       );
     });
 
@@ -745,7 +745,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       // 掴んでいない側 (anchor) は動かない
       const grown = editor.state.selection;
       expect(grown.anchor).toBe(word.anchor);
-      expect(grown.focus).not.toBe(word.focus);
+      expect(grown.head).not.toBe(word.head);
     });
 
     it("コンテナが縮んだら、隠し入力も中へ置き直す", async () => {
@@ -918,7 +918,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor } = setup({ value: "あいうえお" });
       editor.commands.setSelection(4, 5);
       editor.commands.setValue("あ");
-      expect(editor.state.selection).toEqual({ anchor: 1, focus: 1 });
+      expect(editor.state.selection).toEqual({ anchor: 1, head: 1 });
     });
 
     it("destroy で中身が消える", () => {

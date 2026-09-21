@@ -116,7 +116,7 @@ const noopCan: TextareaCan = {
 /** まだマウントしていない間の写し。触る側に null を配らないため */
 const emptyState: TextareaState = {
   value: "",
-  selection: { anchor: 0, focus: 0 },
+  selection: { anchor: 0, head: 0 },
   selectedText: "",
   composing: false,
 };

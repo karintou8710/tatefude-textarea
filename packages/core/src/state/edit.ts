@@ -16,7 +16,7 @@ export interface EditState {
   /** 選択の掴んだ側 */
   readonly anchor: number;
   /** 選択の動く側 */
-  readonly caret: Caret;
+  readonly head: Caret;
   /** 行を跨ぐときに保つ、元いた字送り方向の位置 */
   readonly goal: Goal;
   readonly history: HistoryState;
@@ -29,7 +29,7 @@ export function newEditState(text = ""): EditState {
   return {
     text: normalize(text),
     anchor: 0,
-    caret: { offset: 0, preferEnd: false },
+    head: { offset: 0, preferEnd: false },
     goal: null,
     history: emptyHistory,
     composition: null,
@@ -63,10 +63,10 @@ export interface Limits {
 export function place(
   text: string,
   selection: Selection,
-): Pick<EditState, "anchor" | "caret" | "goal"> {
+): Pick<EditState, "anchor" | "head" | "goal"> {
   return {
     anchor: clamp(selection.anchor, 0, text.length),
-    caret: { offset: clamp(selection.focus, 0, text.length), preferEnd: false },
+    head: { offset: clamp(selection.head, 0, text.length), preferEnd: false },
     goal: null,
   };
 }

@@ -66,7 +66,7 @@ function pair(value: string, family?: string, height?: number) {
 interface Step {
   label: string;
   anchor: number;
-  focus: number;
+  head: number;
   lineCount: number;
   x: number;
   y: number;
@@ -89,15 +89,15 @@ function expectSame(canvasSteps: Step[], domSteps: Step[]) {
     const d = domSteps[i];
     const ok =
       c.anchor === d.anchor &&
-      c.focus === d.focus &&
+      c.head === d.head &&
       c.lineCount === d.lineCount &&
       Math.abs(c.x - d.x) <= 2 &&
       Math.abs(c.y - d.y) <= 2;
     return ok
       ? []
       : [
-          `${c.label}: canvas[${c.anchor},${c.focus}](${c.x},${c.y})L${c.lineCount}` +
-            ` / dom[${d.anchor},${d.focus}](${d.x},${d.y})L${d.lineCount}`,
+          `${c.label}: canvas[${c.anchor},${c.head}](${c.x},${c.y})L${c.lineCount}` +
+            ` / dom[${d.anchor},${d.head}](${d.x},${d.y})L${d.lineCount}`,
         ];
   });
   expect(diffs).toEqual([]);
@@ -220,7 +220,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
     const atLineStart = state(canvas, "2行目の頭");
     expectSame([atLineStart], [state(dom, "2行目の頭")]);
 
-    expect(atLineStart.focus).toBe(atLineEnd.focus);
+    expect(atLineStart.head).toBe(atLineEnd.head);
     expect(atLineStart.x).toBeLessThan(atLineEnd.x);
     expect(atLineStart.y).toBeLessThan(atLineEnd.y);
   });
@@ -310,7 +310,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
         click(host, box.right - PADDING - lineHeight * 0.5, box.top + PADDING + 65);
       }
       const landed = state(canvas, "fallback");
-      expect(landed.focus).toBeGreaterThan(0);
+      expect(landed.head).toBeGreaterThan(0);
       expectSame([landed], [state(dom, "fallback")]);
     } finally {
       if (original) Object.defineProperty(document, "caretPositionFromPoint", original);

@@ -8,7 +8,7 @@ interface Props {
   editor: TextareaHandle | null;
   writingMode: WritingMode;
   /** 何か選ばれているか。選択が変わるたびに変える */
-  selection: { anchor: number; focus: number };
+  selection: { anchor: number; head: number };
 }
 
 /**
@@ -19,14 +19,14 @@ interface Props {
  */
 export function SelectionToolbar({ editor, writingMode, selection }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const shown = selection.anchor !== selection.focus;
+  const shown = selection.anchor !== selection.head;
 
   useEffect(() => {
     const menu = menuRef.current;
     const container = editor?.container;
     // 選択が変われば矩形も変わる。autoUpdate は送りと寸法しか見ないので、
     // 選択そのものは依存に入れて置き直す
-    if (!menu || !container || selection.anchor === selection.focus) return;
+    if (!menu || !container || selection.anchor === selection.head) return;
 
     // 選択は要素ではないので、矩形だけを持つ仮想要素として渡す。
     // selectionRect は container 基準なので、画面の座標に直してから渡す

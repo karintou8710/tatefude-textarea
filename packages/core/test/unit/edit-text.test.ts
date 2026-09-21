@@ -25,14 +25,14 @@ describe("差し込む", () => {
     const result = insert(at("あいう", 1, 2), "XY", open);
     expect(result.changed).toBe("edit");
     expect(result.state.text).toBe("あXYう");
-    expect(selection(result.state)).toEqual({ anchor: 3, focus: 3 });
+    expect(selection(result.state)).toEqual({ anchor: 3, head: 3 });
   });
 
   it("元の state は書き換わらない", () => {
     const before = at("あいう", 1, 2);
     insert(before, "XY", open);
     expect(before.text).toBe("あいう");
-    expect(selection(before)).toEqual({ anchor: 1, focus: 2 });
+    expect(selection(before)).toEqual({ anchor: 1, head: 2 });
   });
 
   it("何も入らないなら元の state をそのまま返す。描き直しを省くため", () => {
@@ -142,7 +142,7 @@ describe("履歴", () => {
     const back = undo(typed);
     expect(back.changed).toBe("edit");
     expect(back.state.text).toBe("あいう");
-    expect(selection(back.state)).toEqual({ anchor: 3, focus: 3 });
+    expect(selection(back.state)).toEqual({ anchor: 3, head: 3 });
 
     expect(redo(back.state).state.text).toBe("あいうえお");
   });
@@ -204,9 +204,9 @@ describe("入れ替える", () => {
   });
 
   it("同じ本文でも、選択を指定すれば動いたことにする", () => {
-    const result = reset(newEditState("あいう"), "あいう", { anchor: 1, focus: 2 });
+    const result = reset(newEditState("あいう"), "あいう", { anchor: 1, head: 2 });
     expect(result.changed).toBe("edit");
-    expect(selection(result.state)).toEqual({ anchor: 1, focus: 2 });
+    expect(selection(result.state)).toEqual({ anchor: 1, head: 2 });
   });
 
   it("既定では履歴を捨てる", () => {

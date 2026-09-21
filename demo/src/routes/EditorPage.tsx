@@ -18,7 +18,7 @@ export function EditorPage({ initialText }: Props) {
   const [value, setValue] = useState(initialText);
   const { settings, update } = useSettings();
   const editorRef = useRef<TextareaHandle>(null);
-  const [selection, setSelection] = useState({ anchor: 0, focus: 0 });
+  const [selection, setSelection] = useState({ anchor: 0, head: 0 });
   useViewportHeight();
   // キーボードが出ると縦書きの行はそのぶん短くなる。ヘッダーのぶんまで削らない
   const keyboardOpen = useSoftKeyboard();

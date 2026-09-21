@@ -28,12 +28,12 @@ export interface ViewContent {
 /** 選択範囲を前後の順に揃えて返す */
 export function range(state: EditState): [number, number] {
   const a = state.anchor;
-  const b = state.caret.offset;
+  const b = state.head.offset;
   return a <= b ? [a, b] : [b, a];
 }
 
 export function selection(state: EditState): Selection {
-  return { anchor: state.anchor, focus: state.caret.offset };
+  return { anchor: state.anchor, head: state.head.offset };
 }
 
 export function selectedText(state: EditState): string {
@@ -47,7 +47,7 @@ export function composing(state: EditState): boolean {
 
 /** 描画・当たり判定で使う、変換中の字を含めたキャレット */
 export function displayCaret(state: EditState): Caret {
-  return composition.caretOver(state.composition, state.caret);
+  return composition.caretOver(state.composition, state.head);
 }
 
 /** 画面に出すべき中身。レイアウトも色も点滅も知らない */
@@ -57,7 +57,7 @@ export function viewContent(state: EditState): ViewContent {
     text: composition.textOver(state.composition, state.text),
     selection: { start, end },
     caret: displayCaret(state),
-    collapsed: state.anchor === state.caret.offset,
+    collapsed: state.anchor === state.head.offset,
     composing: composing(state),
     composition: composition.rangeOf(state.composition),
     empty: state.text.length === 0,

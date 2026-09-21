@@ -89,7 +89,7 @@ export class Textarea {
   private ops = {
     setValue: (value: string, options: SetValueOptions = {}) =>
       reset(this.editState, value, options.selection, options.keepHistory),
-    setSelection: (anchor: number, focus = anchor) => setSelection(this.editState, anchor, focus),
+    setSelection: (anchor: number, head = anchor) => setSelection(this.editState, anchor, head),
     selectAll: () => selectAll(this.editState),
     insertText: (text: string) => insert(this.editState, text, this.limits()),
     cut: () => cut(this.editState, this.limits()),
@@ -213,7 +213,7 @@ export class Textarea {
     return {
       setValue: (value, options = {}) =>
         this.apply(ops.setValue(value, options), options.notify ?? false),
-      setSelection: (anchor, focus = anchor) => this.apply(ops.setSelection(anchor, focus)),
+      setSelection: (anchor, head = anchor) => this.apply(ops.setSelection(anchor, head)),
       selectAll: () => this.apply(ops.selectAll()),
       insertText: (text) => this.handleInsert(text),
       cut: () => {

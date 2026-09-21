@@ -6,7 +6,7 @@ export interface Theme {
   text: string;
   placeholder: string;
   caret: string;
-  /** 選択範囲。focus を失うと selectionInactive に替わる */
+  /** 選択範囲。DOM の focus を失うと selectionInactive に替わる */
   selection: string;
   selectionInactive: string;
   /** 変換中の文字に引く線 */
@@ -28,11 +28,11 @@ export const defaultTheme: Theme = {
 
 /**
  * UTF-16 オフセットで持つ選択範囲。
- * anchor が掴んだ側、focus が動く側。
+ * anchor が掴んだ側、head が動く側。
  */
 export interface Selection {
   readonly anchor: number;
-  readonly focus: number;
+  readonly head: number;
 }
 
 /** 外へ知らせる先。`TextareaOptions` に混ざって渡されるぶんだけ */
@@ -75,7 +75,7 @@ export interface SetValueOptions {
  */
 export interface TextareaCommands {
   setValue(value: string, options?: SetValueOptions): void;
-  setSelection(anchor: number, focus?: number): void;
+  setSelection(anchor: number, head?: number): void;
   selectAll(): void;
   insertText(text: string): void;
   /** 選択を切り取って返す。自前のメニューやボタンから使う */

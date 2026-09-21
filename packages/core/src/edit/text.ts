@@ -44,7 +44,7 @@ export function deleteBy(
   const [from, to] = range(state);
   if (from !== to) return replace(state, from, to, "", "delete", limits);
 
-  const at = state.caret.offset;
+  const at = state.head.offset;
   const other = byWord
     ? stepWord(state.text, at, direction)
     : stepGrapheme(state.text, at, direction);
@@ -116,7 +116,7 @@ function replace(
       ...state,
       text: state.text.slice(0, from) + text + state.text.slice(to),
       anchor: at,
-      caret: { offset: at, preferEnd: false },
+      head: { offset: at, preferEnd: false },
       goal: null,
       history: history.push(state.history, snapshot(state), kind),
     },
