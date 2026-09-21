@@ -13,11 +13,11 @@ export function Home() {
       <nav className={styles.cards}>
         <Link to="/empty" className={styles.card}>
           <h2>空ページ</h2>
-          <p>何も入っていない器。打ち始めから試す</p>
+          <p>何も入っていないコンテナ。打ち始めから試す</p>
         </Link>
         <Link to="/sample" className={styles.card}>
           <h2>サンプルページ</h2>
-          <p>『吾輩は猫である』を入れた器。折り返しと禁則を見る</p>
+          <p>『吾輩は猫である』を入れたコンテナ。折り返しと禁則を見る</p>
         </Link>
       </nav>
     </div>

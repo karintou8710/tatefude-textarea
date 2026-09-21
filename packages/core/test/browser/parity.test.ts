@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/backend/canvas/index";
-import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
-import { DomTextarea } from "../../src/backend/dom/index";
-import type { Textarea } from "../../src/textarea";
-import type { TextareaOptions } from "../../src/types";
+import type { Backend } from "../../src/backend/backend";
+import { CanvasBackend } from "../../src/backend/canvas/backend";
+import { resolveCanvasStyle } from "../../src/backend/canvas/style";
+import { DomBackend } from "../../src/backend/dom/backend";
+import { Textarea } from "../../src/textarea";
+import { resolveOptions, type TextareaOptions } from "../../src/types";
 import { applyStyle, canvasStyle } from "./style";
 
 /**
@@ -26,29 +27,39 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-function mount(
-  Ctor: new (host: HTMLElement, options: TextareaOptions, style?: CanvasStyleOptions) => Textarea,
-  value: string,
-  family?: string,
-  height = HEIGHT,
-) {
+interface Mounted {
+  host: HTMLElement;
+  editor: Textarea;
+  /** 行数は公開 API に無いので、バックエンドを直に持つ */
+  backend: Backend;
+  textarea: HTMLTextAreaElement;
+}
+
+function mount(kind: "canvas" | "dom", value: string, family?: string, height = HEIGHT): Mounted {
   const style = { size: SIZE, lineHeight: LINE_HEIGHT, padding: PADDING, family };
   const host = document.createElement("div");
   Object.assign(host.style, { width: `${WIDTH}px`, height: `${height}px` });
   applyStyle(host, style);
   document.body.appendChild(host);
-  const editor = new Ctor(host, { value, caretBlinkInterval: 0 }, canvasStyle(style));
+
+  const options: TextareaOptions = { value, caretBlinkInterval: 0 };
+  const resolved = resolveOptions(options);
+  const backend: Backend =
+    kind === "canvas"
+      ? new CanvasBackend(host, resolved, resolveCanvasStyle(canvasStyle(style)))
+      : new DomBackend(host, resolved);
+  const editor = new Textarea(host, { ...options, backend });
   cleanups.push(() => {
     editor.destroy();
     host.remove();
   });
-  return { host, editor, textarea: host.querySelector("textarea") as HTMLTextAreaElement };
+  return { host, editor, backend, textarea: host.querySelector("textarea") as HTMLTextAreaElement };
 }
 
 function pair(value: string, family?: string, height?: number) {
   return {
-    canvas: mount(CanvasTextarea, value, family, height),
-    dom: mount(DomTextarea, value, family, height),
+    canvas: mount("canvas", value, family, height),
+    dom: mount("dom", value, family, height),
   };
 }
 
@@ -61,12 +72,12 @@ interface Step {
   y: number;
 }
 
-function state(editor: Textarea, label = ""): Step {
-  const rect = editor.caretRect;
+function state(mounted: Mounted, label = ""): Step {
+  const rect = mounted.editor.caretRect;
   return {
     label,
-    ...editor.selection,
-    lineCount: editor.lineCount,
+    ...mounted.editor.state.selection,
+    lineCount: mounted.backend.lineCount,
     x: Math.round(rect.x),
     y: Math.round(rect.y),
   };
@@ -92,14 +103,11 @@ function expectSame(canvasSteps: Step[], domSteps: Step[]) {
   expect(diffs).toEqual([]);
 }
 
-function drive(
-  target: { editor: Textarea; textarea: HTMLTextAreaElement },
-  keys: readonly (readonly [string, KeyboardEventInit?])[],
-): Step[] {
+function drive(target: Mounted, keys: readonly (readonly [string, KeyboardEventInit?])[]): Step[] {
   return keys.map(([name, init]) => {
     key(target.textarea, name, init ?? {});
     return state(
-      target.editor,
+      target,
       `${name}${init?.shiftKey ? "+Shift" : ""}${init?.metaKey ? "+Meta" : ""}${init?.altKey ? "+Alt" : ""}`,
     );
   });
@@ -150,8 +158,8 @@ describe("2 つのバックエンドが同じところに着く", () => {
     ["段落の端へ", mixed, 5, repeat(6, "ArrowLeft", { altKey: true })],
   ])("%s", (_label, value, start, keys) => {
     const { canvas, dom } = pair(value);
-    canvas.editor.setSelection(start);
-    dom.editor.setSelection(start);
+    canvas.editor.commands.setSelection(start);
+    dom.editor.commands.setSelection(start);
 
     expectSame(drive(canvas, keys), drive(dom, keys));
   });
@@ -169,16 +177,16 @@ describe("2 つのバックエンドが同じところに着く", () => {
     ],
   ] as const)("%s", (_label, value, start, keys) => {
     const { canvas, dom } = pair(value);
-    canvas.editor.setSelection(start);
-    dom.editor.setSelection(start);
+    canvas.editor.commands.setSelection(start);
+    dom.editor.commands.setSelection(start);
 
     expectSame(drive(canvas, keys), drive(dom, keys));
   });
 
   it.each(["", "\n", "\n\n\n", "あい\n", "\nあい", "あ"])("端の本文 %j", (value) => {
     const { canvas, dom } = pair(value);
-    canvas.editor.setSelection(value.length);
-    dom.editor.setSelection(value.length);
+    canvas.editor.commands.setSelection(value.length);
+    dom.editor.commands.setSelection(value.length);
 
     const keys = [
       "ArrowUp",
@@ -203,14 +211,14 @@ describe("2 つのバックエンドが同じところに着く", () => {
     // 1 行目の末尾側を突く
     click(canvas.host, column(canvas.host, 0), top(canvas.host) + 199);
     click(dom.host, column(dom.host, 0), top(dom.host) + 199);
-    const atLineEnd = state(canvas.editor, "1行目の末尾");
-    expectSame([atLineEnd], [state(dom.editor, "1行目の末尾")]);
+    const atLineEnd = state(canvas, "1行目の末尾");
+    expectSame([atLineEnd], [state(dom, "1行目の末尾")]);
 
     // 2 行目の頭側を突く。offset は同じでも着く行が違う
     click(canvas.host, column(canvas.host, 1), top(canvas.host) + 1);
     click(dom.host, column(dom.host, 1), top(dom.host) + 1);
-    const atLineStart = state(canvas.editor, "2行目の頭");
-    expectSame([atLineStart], [state(dom.editor, "2行目の頭")]);
+    const atLineStart = state(canvas, "2行目の頭");
+    expectSame([atLineStart], [state(dom, "2行目の頭")]);
 
     expect(atLineStart.focus).toBe(atLineEnd.focus);
     expect(atLineStart.x).toBeLessThan(atLineEnd.x);
@@ -228,7 +236,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
       const box = host.getBoundingClientRect();
       click(host, box.right - PADDING - lineHeight * 0.5, box.top + PADDING + 30);
     }
-    expectSame([state(canvas.editor, "送ってから突く")], [state(dom.editor, "送ってから突く")]);
+    expectSame([state(canvas, "送ってから突く")], [state(dom, "送ってから突く")]);
   });
 
   /**
@@ -244,7 +252,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
       // どこかで 1 行に入る字数がずれる
       const counts = [190, 200, 210, 220, 230, 240].map((height) => {
         const { canvas, dom } = pair(long, family, height);
-        return [`${height}: ${canvas.editor.lineCount}`, `${height}: ${dom.editor.lineCount}`];
+        return [`${height}: ${canvas.backend.lineCount}`, `${height}: ${dom.backend.lineCount}`];
       });
       expect(counts.map(([c]) => c)).toEqual(counts.map(([, d]) => d));
 
@@ -257,25 +265,25 @@ describe("2 つのバックエンドが同じところに着く", () => {
   it("編集したあとも揃っている", () => {
     const cases: ((editor: Textarea) => void)[] = [
       (e) => {
-        e.selectAll();
-        e.insertText("か");
+        e.commands.selectAll();
+        e.commands.insertText("か");
       },
       (e) => {
-        e.setSelection(2, 8);
-        e.insertText("");
+        e.commands.setSelection(2, 8);
+        e.commands.insertText("");
       },
       (e) => {
-        e.insertText("かき");
-        e.undo();
+        e.commands.insertText("かき");
+        e.commands.undo();
       },
       (e) => {
-        e.insertText("かき");
-        e.undo();
-        e.redo();
+        e.commands.insertText("かき");
+        e.commands.undo();
+        e.commands.redo();
       },
       (e) => {
-        e.setSelection(9);
-        e.setValue("あ");
+        e.commands.setSelection(9);
+        e.commands.setValue("あ");
       },
     ];
 
@@ -283,7 +291,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
       const { canvas, dom } = pair(wrap);
       edit(canvas.editor);
       edit(dom.editor);
-      expectSame([state(canvas.editor, `編集 ${index}`)], [state(dom.editor, `編集 ${index}`)]);
+      expectSame([state(canvas, `編集 ${index}`)], [state(dom, `編集 ${index}`)]);
     });
   });
 
@@ -301,9 +309,9 @@ describe("2 つのバックエンドが同じところに着く", () => {
         const box = host.getBoundingClientRect();
         click(host, box.right - PADDING - lineHeight * 0.5, box.top + PADDING + 65);
       }
-      const landed = state(canvas.editor, "fallback");
+      const landed = state(canvas, "fallback");
       expect(landed.focus).toBeGreaterThan(0);
-      expectSame([landed], [state(dom.editor, "fallback")]);
+      expectSame([landed], [state(dom, "fallback")]);
     } finally {
       if (original) Object.defineProperty(document, "caretPositionFromPoint", original);
       else Reflect.deleteProperty(document, "caretPositionFromPoint");

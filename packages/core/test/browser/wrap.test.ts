@@ -1,7 +1,7 @@
 import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/backend/canvas/index";
-import { DomTextarea } from "../../src/backend/dom/index";
+import { CanvasTextarea } from "../../src/canvas";
+import { DomTextarea } from "../../src/dom";
 import { applyStyle, canvasStyle } from "./style";
 
 const SIZE = 20;
@@ -89,10 +89,10 @@ describe.runIf(server.platform === "darwin")("折り返す位置をネイティ�
       const base = await lineEnds(() => el.selectionStart, el);
 
       const c = ours(CanvasTextarea, value);
-      expect(await lineEnds(() => c.editor.selection.focus, c.textarea)).toEqual(base);
+      expect(await lineEnds(() => c.editor.state.selection.focus, c.textarea)).toEqual(base);
 
       const d = ours(DomTextarea, value);
-      expect(await lineEnds(() => d.editor.selection.focus, d.textarea)).toEqual(base);
+      expect(await lineEnds(() => d.editor.state.selection.focus, d.textarea)).toEqual(base);
     },
     30000,
   );

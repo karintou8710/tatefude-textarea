@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/backend/canvas/index";
 import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
-import { DomTextarea } from "../../src/backend/dom/index";
+import { CanvasTextarea } from "../../src/canvas";
+import { DomTextarea } from "../../src/dom";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions, WritingMode } from "../../src/types";
 import { applyStyle, canvasStyle, type TestStyle } from "./style";
@@ -132,18 +132,18 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("打った文字が value に入る", () => {
       const { editor, textarea } = setup();
       type(textarea, "吾輩は猫");
-      expect(editor.value).toBe("吾輩は猫");
-      expect(editor.selection).toEqual({ anchor: 4, focus: 4 });
+      expect(editor.state.value).toBe("吾輩は猫");
+      expect(editor.state.selection).toEqual({ anchor: 4, focus: 4 });
     });
 
     it("最初のキャレットは文頭に置く", () => {
       const { editor } = setup({ value: "あいう" });
-      expect(editor.selection).toEqual({ anchor: 0, focus: 0 });
+      expect(editor.state.selection).toEqual({ anchor: 0, focus: 0 });
     });
 
     it("Enter の直後は次の行の頭にキャレットが来る", () => {
       const { editor, textarea } = setup({ value: "あい" });
-      editor.setSelection(2);
+      editor.commands.setSelection(2);
       const before = editor.caretRect;
 
       key(textarea, "Enter");
@@ -161,43 +161,43 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
     it("Enter で改行する", () => {
       const { editor, textarea } = setup({ value: "あ" });
-      editor.setSelection(1);
+      editor.commands.setSelection(1);
       key(textarea, "Enter");
       type(textarea, "い");
-      expect(editor.value).toBe("あ\nい");
+      expect(editor.state.value).toBe("あ\nい");
     });
 
     it("Backspace で 1 文字消す", () => {
       const { editor, textarea } = setup({ value: "あい" });
-      editor.setSelection(2);
+      editor.commands.setSelection(2);
       key(textarea, "Backspace");
-      expect(editor.value).toBe("あ");
+      expect(editor.state.value).toBe("あ");
     });
 
     it("結合した絵文字はまとめて消える", () => {
       const { editor, textarea } = setup({ value: "a👨‍👩‍👦" });
-      editor.setSelection(editor.value.length);
+      editor.commands.setSelection(editor.state.value.length);
       key(textarea, "Backspace");
-      expect(editor.value).toBe("a");
+      expect(editor.state.value).toBe("a");
     });
 
     it("\\r\\n は \\n に均す", () => {
       const { editor, textarea } = setup();
       type(textarea, "あ\r\nい");
-      expect(editor.value).toBe("あ\nい");
+      expect(editor.state.value).toBe("あ\nい");
     });
 
     it("maxLength を超えるぶんは切る", () => {
       const { editor, textarea } = setup({ maxLength: 3 });
       type(textarea, "あいうえお");
-      expect(editor.value).toBe("あいう");
+      expect(editor.state.value).toBe("あいう");
     });
 
     it("readOnly では入らない", () => {
       const { editor, textarea } = setup({ value: "あ", readOnly: true });
       type(textarea, "い");
       key(textarea, "Backspace");
-      expect(editor.value).toBe("あ");
+      expect(editor.state.value).toBe("あ");
     });
 
     it("onChange が変更後の値で呼ばれる", () => {
@@ -212,10 +212,10 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
   describe("IME", () => {
     it("変換を確定すると本文に入る", () => {
       const { editor, textarea } = setup({ value: "「" });
-      editor.setSelection(1);
+      editor.commands.setSelection(1);
       compose(textarea, "にほんご", "日本語");
-      expect(editor.value).toBe("「日本語");
-      expect(editor.selection).toEqual({ anchor: 4, focus: 4 });
+      expect(editor.state.value).toBe("「日本語");
+      expect(editor.state.selection).toEqual({ anchor: 4, focus: 4 });
     });
 
     it("変換中は本文がまだ変わらない", () => {
@@ -229,20 +229,20 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           data: "にほんご",
         }),
       );
-      expect(editor.value).toBe("");
+      expect(editor.state.value).toBe("");
     });
 
     it("選択したまま変換を始めると選択が消える", () => {
       const { editor, textarea } = setup({ value: "あいう" });
-      editor.setSelection(0, 3);
+      editor.commands.setSelection(0, 3);
       compose(textarea, "ねこ", "猫");
-      expect(editor.value).toBe("猫");
+      expect(editor.state.value).toBe("猫");
     });
 
     it("変換を取り消しても本文は変わらない", () => {
       const { editor, textarea } = setup({ value: "あ" });
       compose(textarea, "にほんご", "");
-      expect(editor.value).toBe("あ");
+      expect(editor.state.value).toBe("あ");
     });
   });
 
@@ -251,75 +251,75 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("字送りは 1 文字ずつ動く", () => {
       const { nextChar, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
       key(textarea, nextChar);
-      expect(editor.selection.focus).toBe(1);
+      expect(editor.state.selection.focus).toBe(1);
       key(textarea, prevChar);
-      expect(editor.selection.focus).toBe(0);
+      expect(editor.state.selection.focus).toBe(0);
     });
 
     it("行送りは行を移る", () => {
       const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
       key(textarea, nextLine);
 
       // 何文字目で折り返すかは実フォントの送り次第。
       // canvas 版は全角を 1em と決め打つが、dom 版はフォントの縦送りに従う
-      const landed = editor.selection.focus;
+      const landed = editor.state.selection.focus;
       expect(landed).toBeGreaterThan(0);
       expect(landed).toBeLessThan(400);
 
       key(textarea, prevLine);
-      expect(editor.selection.focus).toBe(0);
+      expect(editor.state.selection.focus).toBe(0);
     });
 
     it("選んでいるときの字送りは選んだ端に畳む", () => {
       const { nextChar, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいうえお" });
-      editor.setSelection(1, 3);
+      editor.commands.setSelection(1, 3);
       key(textarea, prevChar);
-      expect(editor.selection).toEqual({ anchor: 1, focus: 1 });
+      expect(editor.state.selection).toEqual({ anchor: 1, focus: 1 });
 
-      editor.setSelection(1, 3);
+      editor.commands.setSelection(1, 3);
       key(textarea, nextChar);
-      expect(editor.selection).toEqual({ anchor: 3, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 3, focus: 3 });
 
       // 逆向きに選んでいても、着くのは選んだ端
-      editor.setSelection(3, 1);
+      editor.commands.setSelection(3, 1);
       key(textarea, nextChar);
-      expect(editor.selection).toEqual({ anchor: 3, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 3, focus: 3 });
     });
 
     it("端で止まった字送りは行を移るときの狙いを消さない", () => {
       const { nextLine, prevLine, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう\nかきく" });
-      editor.setSelection(1);
+      editor.commands.setSelection(1);
       key(textarea, prevLine);
-      expect(editor.selection.focus).toBe(0);
+      expect(editor.state.selection.focus).toBe(0);
 
       // 文頭では動けない。ここで狙いを捨てると、次の行送りが行頭に落ちてしまう
       key(textarea, prevChar);
       key(textarea, nextLine);
-      expect(editor.selection.focus).toBe(5);
+      expect(editor.state.selection.focus).toBe(5);
     });
 
     it("折り返しの境目に着いたキャレットは次の行の先頭に居る", () => {
       const { nextChar, nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: `あ\n${"あ".repeat(400)}` });
       // 何文字目で折り返すかはフォント次第なので、行送りで境目を探す
-      editor.setSelection(2);
+      editor.commands.setSelection(2);
       key(textarea, nextLine);
-      const wrap = editor.selection.focus;
+      const wrap = editor.state.selection.focus;
       expect(wrap).toBeGreaterThan(2);
 
-      editor.setSelection(wrap - 1);
+      editor.commands.setSelection(wrap - 1);
       key(textarea, nextChar);
-      expect(editor.selection.focus).toBe(wrap);
+      expect(editor.state.selection.focus).toBe(wrap);
 
       // 前の行の末尾に居ると、短い 1 行目まで落ちて 1 になってしまう
       key(textarea, prevLine);
-      expect(editor.selection.focus).toBe(2);
+      expect(editor.state.selection.focus).toBe(2);
     });
 
     it.runIf(ctor === DomTextarea)("ブラウザが行送りを丸めても本文からずれない", () => {
@@ -335,12 +335,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       ) as HTMLElement;
       // 丸めるエンジンと同じ状況を作って、組み直させる
       content.style.setProperty("line-height", "30px", "important");
-      editor.setValue(`${"あ".repeat(400)}い`);
+      editor.commands.setValue(`${"あ".repeat(400)}い`);
 
       // 遠い行で、字とキャレットを比べる
       const node = content.firstChild as Text;
       const offset = 200;
-      editor.setSelection(offset);
+      editor.commands.setSelection(offset);
 
       const range = document.createRange();
       range.setStart(node, offset);
@@ -358,11 +358,11 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(Math.abs(caretCenter - glyphCenter)).toBeLessThan(1);
     });
 
-    it("器が縮んでもキャレットを見失わない", async () => {
-      // スマホでキーボードが出ると器が縮む。縦書きなら行の長さごと変わって全部組み直る
+    it("コンテナが縮んでもキャレットを見失わない", async () => {
+      // スマホでキーボードが出るとコンテナが縮む。縦書きなら行の長さごと変わって全部組み直る
       const { container, editor } = setup({ value: "あ".repeat(400) });
       editor.focus();
-      editor.setSelection(400);
+      editor.commands.setSelection(400);
 
       container.style.height = "80px";
       // ResizeObserver は次のフレームで来る
@@ -378,40 +378,40 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("Shift を足すと選択が伸びる", () => {
       const { nextChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
       key(textarea, nextChar, { shiftKey: true });
       key(textarea, nextChar, { shiftKey: true });
-      expect(editor.selection).toEqual({ anchor: 0, focus: 2 });
+      expect(editor.state.selection).toEqual({ anchor: 0, focus: 2 });
     });
 
     it("修飾キー付きの行送りで文頭と文末へ飛ぶ", () => {
       const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
-      editor.setSelection(1);
+      editor.commands.setSelection(1);
       key(textarea, nextLine, { metaKey: true });
-      expect(editor.selection.focus).toBe(3);
+      expect(editor.state.selection.focus).toBe(3);
       key(textarea, prevLine, { metaKey: true });
-      expect(editor.selection.focus).toBe(0);
+      expect(editor.state.selection.focus).toBe(0);
     });
 
     it("Option 付きの行送りで段落の端へ飛ぶ", () => {
       const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あい\nうえお\nかき" });
-      editor.setSelection(4);
+      editor.commands.setSelection(4);
       key(textarea, prevLine, { altKey: true });
-      expect(editor.selection.focus).toBe(3);
+      expect(editor.state.selection.focus).toBe(3);
       // 段落の頭に居るときは、その段落の末まで
       key(textarea, nextLine, { altKey: true });
-      expect(editor.selection.focus).toBe(6);
+      expect(editor.state.selection.focus).toBe(6);
     });
 
     it("画面に入っていない行へも移れる", () => {
       // dom 側は当たり判定を描画に頼っていたので、隠れた行へ移れず文末へ飛んでいた
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
       key(textarea, "PageDown");
 
-      const focus = editor.selection.focus;
+      const focus = editor.state.selection.focus;
       expect(focus).toBeGreaterThan(0);
       expect(focus).toBeLessThan(400);
     });
@@ -419,12 +419,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("行送りを繰り返しても文末へ飛ばない", () => {
       const { nextLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
 
       const seen: number[] = [];
       for (let i = 0; i < 8; i++) {
         key(textarea, nextLine);
-        seen.push(editor.selection.focus);
+        seen.push(editor.state.selection.focus);
       }
 
       // 行ごとに進むだけ。順番も崩れない
@@ -436,17 +436,17 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       // 改行の矩形は潰れているので、行の中を引くときに読み飛ばしてしまっていた
       const { prevLine } = arrows();
       const { editor, textarea } = setup({ value: "\n" });
-      editor.setSelection(1);
+      editor.commands.setSelection(1);
       key(textarea, prevLine);
       key(textarea, "Home");
-      expect(editor.selection.focus).toBe(0);
+      expect(editor.state.selection.focus).toBe(0);
     });
 
     it.each(["", "\n", "\n\n\n", "あい\n", "\nあい", "あ"])(
       "%j でもキャレットが本文の外へ出ない",
       (value) => {
         const { editor, textarea } = setup({ value });
-        editor.setSelection(value.length);
+        editor.commands.setSelection(value.length);
 
         for (const name of [
           "ArrowUp",
@@ -459,8 +459,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           "PageDown",
         ]) {
           key(textarea, name);
-          expect(editor.selection.focus).toBeGreaterThanOrEqual(0);
-          expect(editor.selection.focus).toBeLessThanOrEqual(value.length);
+          expect(editor.state.selection.focus).toBeGreaterThanOrEqual(0);
+          expect(editor.state.selection.focus).toBeLessThanOrEqual(value.length);
         }
       },
     );
@@ -468,7 +468,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("全選択できる", () => {
       const { editor, textarea } = setup({ value: "あいう" });
       key(textarea, "a", { metaKey: true });
-      expect(editor.selection).toEqual({ anchor: 0, focus: 3 });
+      expect(editor.state.selection).toEqual({ anchor: 0, focus: 3 });
     });
   });
 
@@ -494,7 +494,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerup", at);
 
       expect(document.activeElement).toBe(textarea);
-      expect(editor.selection.focus).toBeGreaterThan(0);
+      expect(editor.state.selection.focus).toBeGreaterThan(0);
     });
 
     it("ブラウザがスクロールを取ったら叩いた扱いにしない", () => {
@@ -514,15 +514,15 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       pointer(container, "pointerdown", { ...at, pointerType: "mouse" });
       expect(document.activeElement).toBe(textarea);
-      expect(editor.selection.focus).toBeGreaterThan(0);
+      expect(editor.state.selection.focus).toBeGreaterThan(0);
     });
 
-    it("叩いた場所は器が縮んでも動かない", async () => {
+    it("叩いた場所はコンテナが縮んでも動かない", async () => {
       // キーボードは何段階かに分けて出てくる。組み直るたびに、突いた行は画面の同じところに残す
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       // 先頭からずらしておく。送りが 0 のままだと戻す先が合っていなくても気づけない
-      editor.setSelection(600);
+      editor.commands.setSelection(600);
       await nextFrames();
 
       const at = middle(container);
@@ -545,12 +545,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     });
 
     it("なぞってから叩いても、指の下にキャレットが来る", async () => {
-      // 焦点の無いところを叩くと、焦点を入れた時点で「古いキャレットを見せる」送りが入る。
+      // focus の無いところを叩くと、focus を入れた時点で「古いキャレットを見せる」送りが入る。
       // なぞって古いキャレットを画面の外へ出しておくと、それに引きずられて別の列に着く
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       editor.focus();
-      editor.setSelection(200);
+      editor.commands.setSelection(200);
       await nextFrames();
       // キーボードを閉じた直後と同じ状態にして、指でなぞる
       editor.blur();
@@ -574,16 +574,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor } = setup({ value: "吾輩は猫である。名前はまだ無い。".repeat(10) });
       expect(editor.selectionRect).toBeNull();
 
-      editor.setSelection(10, 30);
+      editor.commands.setSelection(10, 30);
       const rect = editor.selectionRect;
       if (!rect) throw new Error("選択しているのに矩形が無い");
       expect(rect.width).toBeGreaterThan(0);
       expect(rect.height).toBeGreaterThan(0);
 
       // 両端のキャレットを含む
-      editor.setSelection(10);
+      editor.commands.setSelection(10);
       const head = editor.caretRect;
-      editor.setSelection(30);
+      editor.commands.setSelection(30);
       const tail = editor.caretRect;
       for (const point of [head, tail]) {
         expect(point.x).toBeGreaterThanOrEqual(rect.x - 1);
@@ -601,7 +601,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerdown", at);
       await new Promise((resolve) => setTimeout(resolve, 600));
       expect(document.activeElement).toBe(textarea);
-      const placed = editor.selection;
+      const placed = editor.state.selection;
       expect(placed.anchor).toBe(placed.focus);
 
       // 掴んだままなぞると、キャレットが付いてくる (選択は伸びない)
@@ -610,7 +610,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
         clientY: at.clientY + 40,
       });
       pointer(container, "pointerup", { clientX: at.clientX + 40, clientY: at.clientY + 40 });
-      const moved = editor.selection;
+      const moved = editor.state.selection;
       expect(moved.anchor).toBe(moved.focus);
       expect(moved.focus).not.toBe(placed.focus);
     });
@@ -627,7 +627,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       // なぞっただけ。キーボードも出さないし、キャレットも動かさない
       expect(document.activeElement).not.toBe(textarea);
-      expect(editor.selection).toEqual({ anchor: 0, focus: 0 });
+      expect(editor.state.selection).toEqual({ anchor: 0, focus: 0 });
     });
 
     it("続けて 2 回叩くと単語、3 回で段落を選ぶ", () => {
@@ -637,16 +637,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
-      expect(editor.selection.anchor).toBe(editor.selection.focus);
+      expect(editor.state.selection.anchor).toBe(editor.state.selection.focus);
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
-      const word = editor.selection;
+      const word = editor.state.selection;
       expect(Math.abs(word.focus - word.anchor)).toBeGreaterThan(0);
 
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
-      const paragraph = editor.selection;
+      const paragraph = editor.state.selection;
       expect(Math.abs(paragraph.focus - paragraph.anchor)).toBeGreaterThan(
         Math.abs(word.focus - word.anchor),
       );
@@ -659,12 +659,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
       pointer(container, "pointerdown", at);
-      const word = editor.selection;
+      const word = editor.state.selection;
 
       pointer(container, "pointermove", { clientX: at.clientX + 50, clientY: at.clientY + 50 });
       pointer(container, "pointerup", { clientX: at.clientX + 50, clientY: at.clientY + 50 });
 
-      const grown = editor.selection;
+      const grown = editor.state.selection;
       expect(grown.anchor).toBe(word.anchor);
       expect(Math.abs(grown.focus - grown.anchor)).toBeGreaterThan(
         Math.abs(word.focus - word.anchor),
@@ -690,7 +690,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(dots.map((el) => el.dataset.handle)).toEqual(["start", "end"]);
 
       // 丸は棒から行送り方向の外側へ、半径ぶん押し出したところ
-      const { anchor, focus } = editor.selection;
+      const { anchor, focus } = editor.state.selection;
       const [from, to] = anchor <= focus ? [anchor, focus] : [focus, anchor];
       const box = container.getBoundingClientRect();
       const centerOf = (el: HTMLElement) => {
@@ -701,7 +701,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       // 測る前に控える。選択を畳むとつまみは消えてしまう
       const [startDot, endDot] = [centerOf(dots[0]), centerOf(dots[1])];
 
-      editor.setSelection(from);
+      editor.commands.setSelection(from);
       await nextFrames();
       const head = editor.caretRect;
       expect(startDot).toEqual(
@@ -710,7 +710,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           : { x: head.x, y: head.y - radius },
       );
 
-      editor.setSelection(to);
+      editor.commands.setSelection(to);
       await nextFrames();
       const tail = editor.caretRect;
       expect(endDot).toEqual(
@@ -730,7 +730,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
       await nextFrames();
-      const word = editor.selection;
+      const word = editor.state.selection;
 
       const handle = container.querySelector('[data-handle="end"]') as HTMLElement | null;
       if (!handle) throw new Error("つまみが描かれていない");
@@ -743,16 +743,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerup", to);
 
       // 掴んでいない側 (anchor) は動かない
-      const grown = editor.selection;
+      const grown = editor.state.selection;
       expect(grown.anchor).toBe(word.anchor);
       expect(grown.focus).not.toBe(word.focus);
     });
 
-    it("器が縮んだら、隠し入力も中へ置き直す", async () => {
+    it("コンテナが縮んだら、隠し入力も中へ置き直す", async () => {
       // iOS はキーボードの下に取り残された入力を見つけると、開いた直後に閉じてしまう
       const { container, editor, textarea } = setup({ value: "あ".repeat(2000) });
       editor.focus();
-      editor.setSelection(600);
+      editor.commands.setSelection(600);
       await nextFrames();
 
       // キーボードが出てくる側 (下端) の近くを叩く
@@ -775,8 +775,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     });
 
     it("キーボードを閉じた時も、列は動かない", async () => {
-      // 開く時と同じで、閉じる時も器が変わって全部組み直る。
-      // 焦点が外れたあとなので、戻す先を持っていないと読んでいた場所ごと飛ぶ
+      // 開く時と同じで、閉じる時もコンテナが変わって全部組み直る。
+      // focus が外れたあとなので、戻す先を持っていないと読んでいた場所ごと飛ぶ
       const { container, editor, textarea } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       const blockOfCaret = () => {
@@ -785,7 +785,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       };
 
       editor.focus();
-      editor.setSelection(600);
+      editor.commands.setSelection(600);
       await nextFrames();
       const at = middle(container);
       pointer(container, "pointerdown", at);
@@ -799,7 +799,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       await nextFrames();
       const before = blockOfCaret();
 
-      // 閉じる。焦点が外れてから器が戻る
+      // 閉じる。focus が外れてからコンテナが戻る
       editor.blur();
       if (vertical) container.style.height = "200px";
       else container.style.width = "300px";
@@ -809,13 +809,13 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     });
 
     it("潰れる側を叩いても、キャレットは画面に残る", async () => {
-      // 器は行送り方向にも潰れる。潰れた側を叩いていると、戻す先がそのまま画面の外になる
+      // コンテナは行送り方向にも潰れる。潰れた側を叩いていると、戻す先がそのまま画面の外になる
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
-      editor.setSelection(600);
+      editor.commands.setSelection(600);
       await nextFrames();
 
-      // 器が減る側 (縦書きなら右端、横書きなら下端) の近くを叩く
+      // コンテナが減る側 (縦書きなら右端、横書きなら下端) の近くを叩く
       const box = container.getBoundingClientRect();
       const at = vertical
         ? { clientX: box.left + box.width - 20, clientY: box.top + box.height / 2 }
@@ -837,10 +837,11 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it.each([
       ["ホイールで送ったら", "wheel"],
       ["指でなぞったら", "pan"],
+      ["外から送ったら", "api"],
     ])("%s、叩いた場所には戻さない", async (_name, how) => {
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
-      editor.setSelection(600);
+      editor.commands.setSelection(600);
       await nextFrames();
 
       const at = middle(container);
@@ -853,6 +854,9 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
         surface.dispatchEvent(
           new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 2000 }),
         );
+      } else if (how === "api") {
+        // 外から送る。ホイールと同じで、掴んだ場所へは戻さない
+        editor.scrollOffset += 2000;
       } else {
         // 指のパンはブラウザが送る。こちらに届くのは「叩かなかった」ことだけ。
         // 叩いた場所から始めると、続けて叩いた扱い (単語を掴んで伸ばす) になる
@@ -870,7 +874,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       else container.style.width = "200px";
       await nextFrames();
 
-      // 戻す約束は解けている。見えるところまで送るだけなので、キャレットは器の端の行に着く。
+      // 戻す約束は解けている。見えるところまで送るだけなので、キャレットはコンテナの端の行に着く。
       // 端に寄せるのは行ボックス (36px) なので、キャレットの中心は余白から半行ぶん内側
       const rect = editor.caretRect;
       const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
@@ -885,19 +889,19 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const { editor, textarea } = setup();
       type(textarea, "あ");
       type(textarea, "い");
-      editor.undo();
-      expect(editor.value).toBe("");
-      editor.redo();
-      expect(editor.value).toBe("あい");
+      editor.commands.undo();
+      expect(editor.state.value).toBe("");
+      editor.commands.redo();
+      expect(editor.state.value).toBe("あい");
     });
 
     it("キャレットを動かすと戻す単位が切れる", () => {
       const { editor, textarea } = setup();
       type(textarea, "あ");
-      editor.setSelection(0);
+      editor.commands.setSelection(0);
       type(textarea, "い");
-      editor.undo();
-      expect(editor.value).toBe("あ");
+      editor.commands.undo();
+      expect(editor.state.value).toBe("あ");
     });
   });
 
@@ -905,16 +909,16 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("setValue は onChange を呼ばない", () => {
       const seen: string[] = [];
       const { editor } = setup({ onChange: (value) => seen.push(value) });
-      editor.setValue("あい");
-      expect(editor.value).toBe("あい");
+      editor.commands.setValue("あい");
+      expect(editor.state.value).toBe("あい");
       expect(seen).toEqual([]);
     });
 
     it("setValue は選択を文字数に収める", () => {
       const { editor } = setup({ value: "あいうえお" });
-      editor.setSelection(4, 5);
-      editor.setValue("あ");
-      expect(editor.selection).toEqual({ anchor: 1, focus: 1 });
+      editor.commands.setSelection(4, 5);
+      editor.commands.setValue("あ");
+      expect(editor.state.selection).toEqual({ anchor: 1, focus: 1 });
     });
 
     it("destroy で中身が消える", () => {
@@ -929,7 +933,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("本文も変換中も選択も描ける", async () => {
       const { editor, textarea } = setup({ value: "吾輩は猫である。\n名前はまだ無い。" });
       editor.focus();
-      editor.setSelection(0, 5);
+      editor.commands.setSelection(0, 5);
       await nextFrames();
 
       textarea.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
@@ -944,21 +948,22 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       );
       await nextFrames();
 
-      expect(editor.lineCount).toBeGreaterThan(0);
+      // 描けたことは例外が飛ばないことで見る。中身は state で確かめる
+      expect(editor.state.composing).toBe(true);
     });
 
     it("空なら placeholder を組む", async () => {
+      // placeholder の見え方はバックエンドごとなので、組めることだけ見る
       const { editor } = setup({ placeholder: "ここに書く" });
       await nextFrames();
-      expect(editor.value).toBe("");
-      expect(editor.lineCount).toBe(1);
+      expect(editor.state.value).toBe("");
     });
   });
 
   describe("ポインタ", () => {
     // WebKit は pointerdown の preventDefault では合成マウスイベントを止めない。
     // touchend の後に届く mousedown に既定動作を許すと、focus が surface に移って
-    // hidden input から焦点が落ちる (iOS でタップしてもキャレットが出なくなる)
+    // hidden input から focus が落ちる (iOS でタップしてもキャレットが出なくなる)
     it("あとから届く mousedown にフォーカスを奪わせない", () => {
       const { container, editor, textarea } = setup({ value: "吾輩は猫である。" });
       const surface = container.firstElementChild as HTMLElement;
@@ -1007,23 +1012,68 @@ describe("描画", () => {
   it("範囲選択の間はキャレットを出さない", async () => {
     const { container, editor } = mount({ value: "あいうえお" });
     editor.focus();
-    editor.setSelection(1);
+    editor.commands.setSelection(1);
     await painted();
     expect(container.querySelector("[data-caret]")).not.toBeNull();
 
-    editor.setSelection(1, 4);
+    editor.commands.setSelection(1, 4);
     await painted();
     expect(container.querySelector("[data-caret]")).toBeNull();
 
-    editor.setSelection(4);
+    editor.commands.setSelection(4);
     await painted();
     expect(container.querySelector("[data-caret]")).not.toBeNull();
   });
 
   it("フォーカスが無ければキャレットを出さない", async () => {
     const { container, editor } = mount({ value: "あいうえお" });
-    editor.setSelection(1);
+    editor.commands.setSelection(1);
     await painted();
     expect(container.querySelector("[data-caret]")).toBeNull();
+  });
+
+  /** 点滅は時間で動くので、決め打ちで待たずに「そのうちこうなる」で見る */
+  const until = async (want: boolean, limit = 2000) => {
+    const started = performance.now();
+    while (performance.now() - started < limit) {
+      if (!!document.querySelector("[data-caret]") === want) return;
+      await painted();
+    }
+    throw new Error(`キャレットが ${want ? "出" : "消え"}ないまま ${limit}ms 過ぎた`);
+  };
+
+  it("focus している間は点滅する", async () => {
+    const { editor } = mount({ value: "あいうえお", caretBlinkInterval: 60 });
+    editor.focus();
+    editor.commands.setSelection(1);
+
+    await until(true);
+    await until(false);
+    await until(true);
+  });
+
+  it("打ったら出た状態から数え直す", async () => {
+    const { editor } = mount({ value: "あいうえお", caretBlinkInterval: 60 });
+    editor.focus();
+    editor.commands.setSelection(1);
+    await until(false);
+
+    // 消える番の途中でも、打てば出る
+    editor.commands.insertText("か");
+    await painted();
+    expect(document.querySelector("[data-caret]")).not.toBeNull();
+  });
+
+  it("間隔が 0 なら点滅しない", async () => {
+    const { editor } = mount({ value: "あいうえお", caretBlinkInterval: 0 });
+    editor.focus();
+    editor.commands.setSelection(1);
+    await until(true);
+
+    const started = performance.now();
+    while (performance.now() - started < 300) {
+      expect(document.querySelector("[data-caret]")).not.toBeNull();
+      await painted();
+    }
   });
 });

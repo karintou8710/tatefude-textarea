@@ -84,3 +84,18 @@ export function stepWord(text: string, offset: number, direction: 1 | -1): numbe
   }
   return 0;
 }
+
+/**
+ * max コード単位に収まるところまで切る。**書記素は割らない。**
+ * 割ると片割れのサロゲートや裸の結合文字が本文に入ってしまう。
+ */
+export function truncateGraphemes(text: string, max: number): string {
+  if (max >= text.length) return text;
+  if (max <= 0) return "";
+  let end = 0;
+  for (const g of segmentGraphemes(text)) {
+    if (g.end > max) break;
+    end = g.end;
+  }
+  return text.slice(0, end);
+}

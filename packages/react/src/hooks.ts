@@ -10,7 +10,10 @@ import {
   type Textarea as CoreEditor,
   DomTextarea,
   type Selection,
+  type TextareaCan,
+  type TextareaCommands,
   type TextareaOptions,
+  type TextareaState,
 } from "tatefude-textarea";
 import { coreOptions } from "./options";
 import type { TextareaHandle, TextareaProps } from "./types";
@@ -60,7 +63,7 @@ export function useEditor(containerRef: RefObject<HTMLDivElement | null>, props:
 }
 
 /**
- * 見た目は CSS に置いたので、props が変わらなくても組み直しが要ることがある。
+ * 見た目は CSS に置いたので、props が変わらなくてもレイアウトが要ることがある。
  * className を差し替えた、style を変えた、外のスタイルシートが変わった——
  * どれも React からは「再描画した」としか見えない。依存を書かずに毎回叩く。
  */
@@ -74,8 +77,8 @@ export function useRefreshOnRender(editorRef: RefObject<CoreEditor | null>): voi
 export function useSyncedValue(editorRef: RefObject<CoreEditor | null>, value: string | undefined) {
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || value === undefined || editor.value === value) return;
-    editor.setValue(value);
+    if (!editor || value === undefined || editor.state.value === value) return;
+    editor.commands.setValue(value);
   }, [editorRef, value]);
 }
 
@@ -88,6 +91,36 @@ export function useSyncedOptions(
   }, [editorRef, options]);
 }
 
+/** まだマウントしていない間の受け皿。触る側に null を配らないため */
+const noopCommands: TextareaCommands = {
+  setValue: () => {},
+  setSelection: () => {},
+  selectAll: () => {},
+  insertText: () => {},
+  cut: () => "",
+  undo: () => {},
+  redo: () => {},
+};
+
+/** まだマウントしていない間は何も動かせない */
+const noopCan: TextareaCan = {
+  setValue: () => false,
+  setSelection: () => false,
+  selectAll: () => false,
+  insertText: () => false,
+  cut: () => false,
+  undo: () => false,
+  redo: () => false,
+};
+
+/** まだマウントしていない間の写し。触る側に null を配らないため */
+const emptyState: TextareaState = {
+  value: "",
+  selection: { anchor: 0, focus: 0 },
+  selectedText: "",
+  composing: false,
+};
+
 export function useEditorHandle(
   ref: Ref<TextareaHandle> | undefined,
   editorRef: RefObject<CoreEditor | null>,
@@ -97,19 +130,21 @@ export function useEditorHandle(
     () => ({
       focus: () => editorRef.current?.focus(),
       blur: () => editorRef.current?.blur(),
-      insertText: (text: string) => editorRef.current?.insertText(text),
-      cut: () => editorRef.current?.cut() ?? "",
-      selectAll: () => editorRef.current?.selectAll(),
-      get selectedText() {
-        return editorRef.current?.selectedText ?? "";
+      get state() {
+        return editorRef.current?.state ?? emptyState;
+      },
+      get commands() {
+        return editorRef.current?.commands ?? noopCommands;
+      },
+      get can() {
+        return editorRef.current?.can ?? noopCan;
+      },
+      get container() {
+        return editorRef.current?.container ?? null;
       },
       get selectionRect() {
         return editorRef.current?.selectionRect ?? null;
       },
-      setSelection: (anchor: number, focus?: number) =>
-        editorRef.current?.setSelection(anchor, focus),
-      undo: () => editorRef.current?.undo(),
-      redo: () => editorRef.current?.redo(),
       get editor() {
         return editorRef.current;
       },

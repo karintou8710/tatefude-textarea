@@ -15,7 +15,7 @@ export interface TestStyle {
 
 export function applyStyle(el: HTMLElement, style: TestStyle): void {
   Object.assign(el.style, {
-    // padding を実 CSS に置いたので、器の寸法に足されないよう border-box に寄せる
+    // padding を実 CSS に置いたので、コンテナの寸法に足されないよう border-box に寄せる
     boxSizing: "border-box",
     fontFamily: style.family ?? defaultFont.family,
     fontSize: `${style.size}px`,

@@ -1,11 +1,20 @@
-import type { WritingMode } from "../types";
+import type { Command } from "../edit/command";
+import type { CaretRect } from "../layout";
+import { commandFor, strokeOf } from "./keymap";
+import type { Input, InputOptions } from "./receivers";
 
 export interface HiddenInputHandlers {
   insert(text: string): void;
   compositionStart(): void;
   compositionUpdate(text: string, activeStart: number, activeEnd: number): void;
   compositionEnd(text: string): void;
-  keyDown(event: KeyboardEvent): void;
+  /**
+   * キーが押された。割り当てが無ければ null。
+   * 何のキーでも来るのは、打ったらつまみを引っ込めるため
+   */
+  keyDown(command: Command | null): void;
+  /** キャレットの居場所と、全角 1 文字ぶん。候補ウィンドウを脇に出すのに要る */
+  caretAnchor(): { rect: CaretRect; size: number };
   copy(): string;
   cut(): string;
   paste(text: string): void;
@@ -17,7 +26,7 @@ export interface HiddenInputHandlers {
  * 画面に出さない textarea。IME とクリップボードはブラウザに任せたいので、
  * 入力を受けるのはこの要素で、canvas は描くだけにする。
  */
-export class HiddenInput {
+export class HiddenInput implements Input {
   readonly element: HTMLTextAreaElement;
   private container: HTMLElement;
   private composing = false;
@@ -26,6 +35,7 @@ export class HiddenInput {
   constructor(
     container: HTMLElement,
     private handlers: HiddenInputHandlers,
+    private options: InputOptions,
   ) {
     this.container = container;
     const element = container.ownerDocument.createElement("textarea");
@@ -65,7 +75,33 @@ export class HiddenInput {
 
     container.appendChild(element);
     this.element = element;
+    this.applyOptions();
     this.bind();
+    this.observeResize();
+  }
+
+  /**
+   * キャレットの脇へ置き直す。キャレットが動いたら呼んでもらう。
+   *
+   * 置いたままだと、キーボードでコンテナが縮んだときに入力がその下へ取り残され、
+   * iOS が開いた直後にキーボードを閉じてしまう。だからコンテナ自身も見ている
+   */
+  followCaret(): void {
+    const { rect, size } = this.handlers.caretAnchor();
+    this.moveTo(rect, size);
+  }
+
+  /**
+   * コンテナが変わればレイアウトし直されるので、そのあとに置き直す。
+   * backend より後に作られるので、レイアウトし直した結果を見てから動ける
+   */
+  private observeResize(): void {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (this.element.ownerDocument.activeElement === this.element) this.followCaret();
+    });
+    observer.observe(this.container);
+    this.disposers.push(() => observer.disconnect());
   }
 
   private bind(): void {
@@ -113,7 +149,10 @@ export class HiddenInput {
 
     on("keydown", (event) => {
       if (this.composing || event.isComposing || event.keyCode === 229) return;
-      this.handlers.keyDown(event);
+      // キーの割り当てはここで済ませる。外へ出すのは「何をするか」だけ
+      const command = commandFor(strokeOf(event), this.options.writingMode);
+      if (command) event.preventDefault();
+      this.handlers.keyDown(command);
     });
 
     on("copy", (event) => {
@@ -149,20 +188,19 @@ export class HiddenInput {
    * 変換中の文字がちょうどキャレットの行に乗る (line-height: 1 が前提)。
    *
    * @param rect キャレットの矩形。container 基準で、行を横切る向きは行ボックス全体
-   * @param mode 変換中の文字と候補ウィンドウをどちら向きに出すか
    * @param size 全角 1 文字ぶん。変換中の字は行ボックスではなくこの幅に乗る
    */
-  moveTo(
+  private moveTo(
     rect: { x: number; y: number; width: number; height: number },
-    mode: WritingMode,
     size: number,
   ): void {
     const style = this.element.style;
+    const mode = this.options.writingMode;
     const vertical = mode === "vertical-rl";
     const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
     style.writingMode = mode;
     style.cursor = vertical ? "vertical-text" : "text";
-    // 器の外へ出すと iOS がキーボードを開いた直後に閉じる。端で止める
+    // コンテナの外へ出すと iOS がキーボードを開いた直後に閉じる。端で止める
     const left = vertical ? Math.round(center + size / 2) - 1 : Math.round(rect.x);
     const top = vertical ? Math.round(rect.y) : Math.round(center - size / 2);
     style.left = `${clamp(left, 0, this.container.clientWidth - 1)}px`;
@@ -170,12 +208,15 @@ export class HiddenInput {
     style.fontSize = `${size}px`;
   }
 
-  setReadOnly(readOnly: boolean): void {
-    this.element.readOnly = readOnly;
+  setOptions(options: InputOptions): void {
+    this.options = options;
+    this.applyOptions();
   }
 
-  setDisabled(disabled: boolean): void {
-    this.element.disabled = disabled;
+  /** DOM に書き込むものだけ当てる。writingMode は読むときに引く */
+  private applyOptions(): void {
+    this.element.readOnly = this.options.readOnly;
+    this.element.disabled = this.options.disabled;
   }
 
   focus(): void {

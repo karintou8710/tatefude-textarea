@@ -37,7 +37,7 @@ const layout = layoutText({
 });
 
 describe("行の座標", () => {
-  it("1 行目の右端が器の右端に来る", () => {
+  it("1 行目の右端がコンテナの右端に来る", () => {
     expect(toPhysical(geometry, 0, 0)).toEqual({ x: 190, y: 10 });
     expect(toPhysical(geometry, 1, 0)).toEqual({ x: 172, y: 10 });
   });

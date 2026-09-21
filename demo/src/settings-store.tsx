@@ -8,7 +8,7 @@ interface Store {
 
 const Context = createContext<Store | null>(null);
 
-/** つまみの位置はページを移っても持ち越す。器が変わるだけで、組み方は変えたくない */
+/** つまみの位置はページを移っても持ち越す。コンテナが変わるだけで、レイアウト方は変えたくない */
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState(defaultSettings);
   const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...prev, ...patch }));

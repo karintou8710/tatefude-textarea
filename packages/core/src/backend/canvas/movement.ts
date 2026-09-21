@@ -1,9 +1,9 @@
-import type { Caret, Goal } from "../../model/movement";
+import type { Caret, Goal } from "../../text/caret";
 import { lineIndexOfOffset, offsetAtLineDistance, offsetInLine } from "./geometry";
 import type { Layout } from "./layout";
 
 /**
- * 組んだ結果 (Layout) を引いて動く。dom バックエンドは同じことを
+ * レイアウトの結果 (Layout) を引いて動く。dom バックエンドは同じことを
  * Range API で引くので、こちらは canvas だけが使う。
  */
 
@@ -38,19 +38,4 @@ export function moveToLineEdge(layout: Layout, caret: Caret, edge: "start" | "en
   const line = layout.lines[index];
   if (edge === "start") return { offset: line.start, preferEnd: false };
   return { offset: line.end, preferEnd: true };
-}
-
-/** ひと画面ぶん行を移る */
-export function movePage(
-  layout: Layout,
-  caret: Caret,
-  direction: 1 | -1,
-  linesPerPage: number,
-  goal: Goal,
-): { caret: Caret; goal: Goal } {
-  let result = { caret, goal };
-  for (let i = 0; i < Math.max(1, linesPerPage); i++) {
-    result = moveAcrossLines(layout, result.caret, direction, result.goal);
-  }
-  return result;
 }

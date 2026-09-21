@@ -8,7 +8,7 @@ Safari は Mac も iOS も、縦書きの `<textarea>` と `contenteditable` が
 直るのを待つにも、こちらから直しにいくにも、相当な時間がかかりそうだった。
 
 `contenteditable` は使わない。入力は画面に出さない `<textarea>` が受け、
-テキスト・選択・履歴・IME はこちらが持つ。組むのはブラウザの `writing-mode` に任せ、
+テキスト・選択・履歴・IME はこちらが持つ。レイアウトはブラウザの `writing-mode` に任せ、
 落ちた位置を Range API で読み返す。
 
 ## 使う
@@ -30,7 +30,7 @@ const editor = new DomTextarea(document.getElementById("editor")!, {
 editor.focus();
 ```
 
-**寸法と組み方は CSS に書く。**字の大きさ・行送り・余白・禁則は、置き場の要素に
+**寸法とレイアウトは CSS に書く。**字の大きさ・行送り・余白・禁則は、置き場の要素に
 当てたスタイルから読む。`className` を渡すと、元から付いているクラスは残したまま足す。
 
 ```css
@@ -49,7 +49,7 @@ editor.setOptions({ theme: { text: "#1a1a1a", selection: "#b4d5fe" } });
 ```
 
 CSS には「変わった」を知らせる口が無い。字の大きさや余白を CSS で変えたら
-`editor.refresh()` を呼ぶ。器の寸法だけなら `ResizeObserver` が拾うので要らない。
+`editor.refresh()` を呼ぶ。コンテナの寸法だけなら `ResizeObserver` が拾うので要らない。
 
 置き場の要素にはサイズが要る。中身は `position: absolute` で敷き詰めるので、
 **高さが 0 に潰れる書き方 (flex アイテムの子に `height: 100%` など) だと何も出ない。**

@@ -1,175 +1,144 @@
-import type {
-  Backend,
-  BackendFactory,
-  CaretRect,
-  CompositionRange,
-  Handle,
-  ViewState,
-} from "./backend/backend";
-import { HiddenInput } from "./input/hidden-input";
-import { type Command, commandFor, strokeOf } from "./input/keymap";
-import { PointerGestures } from "./input/pointer";
-import { normalize, TextDocument } from "./model/document";
-import type { EditKind } from "./model/history";
-import { type Caret, type Goal, moveInline } from "./model/movement";
-import { stepWord } from "./text/segment";
+import type { Backend, CaretRect, ViewState } from "./backend/backend";
+import { buildViewState } from "./backend/view-state";
+import { type Command, runCommand } from "./edit/command";
+import { beginComposition, endComposition, updateComposition } from "./edit/compose";
 import {
+  breakCoalescing,
+  grabHandle,
+  moveCaret,
+  selectAll,
+  selectParagraph,
+  selectWord,
+  setSelection,
+} from "./edit/selection";
+import { cut, insert, redo, reset, undo } from "./edit/text";
+import { HiddenInput, type HiddenInputHandlers } from "./input/hidden-input";
+import { type PointerActions, PointerGestures } from "./input/pointer";
+import type { Input, Pointer } from "./input/receivers";
+import { type EditState, type Limits, newEditState, type Result } from "./state/edit";
+import {
+  composing,
+  displayCaret,
+  range,
+  selectedText,
+  selection,
+  viewContent,
+} from "./state/query";
+import { newScreenState, type ScreenState, setFocused, showHandles } from "./state/screen";
+import {
+  type Callbacks,
+  callbacksOf,
   type ResolvedOptions,
   resolveOptions,
-  type Selection,
+  type SetValueOptions,
+  type TextareaCan,
+  type TextareaCommands,
   type TextareaOptions,
+  type TextareaState,
 } from "./types";
 
-interface Composition {
-  /** 変換中の文字列が入る、確定済みテキスト上の位置 */
-  start: number;
-  text: string;
-  activeStart: number;
-  activeEnd: number;
-}
-
-export interface SetValueOptions {
-  selection?: Selection;
-  /** onChange を呼ぶか。既定では呼ばない */
-  notify?: boolean;
-  keepHistory?: boolean;
-}
+/**
+ * 外から叩ける操作を、副作用を外した形で並べたもの。
+ * 引数は `commands` と同じで、返すのは新しい state だけ
+ */
+type Operations = {
+  [K in keyof TextareaCommands]: (...args: Parameters<TextareaCommands[K]>) => Result;
+};
 
 /**
  * 縦書きテキストエリアの本体。
- * テキスト・履歴・キー操作・IME だけを持ち、組み方と描き方は Backend に委ねる。
+ *
+ * 自分では何も計算しない。部品を組み立てて繋ぎ、
+ * 「動いたら描き直して知らせる」ところだけを持つ。
+ * 編集は `edit/`、レイアウトと描画は Backend、受け口は隠し入力とポインタ。
+ *
+ * **繋ぎ先は表で持つ。**出来事ごとの行き先は `inputHandlers` / `pointerActions` /
+ * `makeCommands` の 3 つに並べてあり、組み立て (constructor) には混ぜない。
+ *
+ * 隠し入力と指はここで作る。`Textarea` を呼び返すハンドラを持って生まれるので、
+ * 外から出来上がりを渡す道は無い。
  */
+/**
+ * `Textarea` を組むのに要るもの。
+ *
+ * **部品は生成時に凍る。**あとから差し替えられる `TextareaOptions` と
+ * 型を分けてあるのは、`setOptions` に backend を渡せてしまわないため。
+ * 渡す側から見ると 1 つの袋だが、動かせる側とそうでない側は型で分かれている。
+ */
+export interface TextareaInit extends TextareaOptions {
+  /**
+   * ④ レイアウトと描画。**渡すのはこれだけ。**
+   *
+   * レイアウトで変わるのは backend だけで、隠し入力と指は container と backend から
+   * 機械的に決まる。差し替える相手が居ない口は作らない
+   */
+  backend: Backend;
+}
+
 export class Textarea {
   readonly container: HTMLElement;
+  /** 編集の操作。本文と選択を動かすものは全部ここから */
+  readonly commands: TextareaCommands;
+  /** その操作がいま何か動かすか。ボタンの出し入れに使う */
+  readonly can: TextareaCan;
 
-  protected backend: Backend;
-  private input: HiddenInput;
-  private doc: TextDocument;
+  /**
+   * 外から叩ける操作を 1 回だけ並べる。**判断はここだけ。**
+   * `commands` (やる) と `can` (動くか) は、どちらもここから導く
+   */
+  private ops = {
+    setValue: (value: string, options: SetValueOptions = {}) =>
+      reset(this.editState, value, options.selection, options.keepHistory),
+    setSelection: (anchor: number, focus = anchor) => setSelection(this.editState, anchor, focus),
+    selectAll: () => selectAll(this.editState),
+    insertText: (text: string) => insert(this.editState, text, this.limits()),
+    cut: () => cut(this.editState, this.limits()),
+    undo: () => undo(this.editState),
+    redo: () => redo(this.editState),
+  } satisfies Operations;
+
+  private backend: Backend;
+  private editState: EditState;
+  private input: Input;
+  private pointer: Pointer;
+  /** 既定値を埋めた設定。部品に配るのはこちら */
   private options: ResolvedOptions;
-  private callbacks: TextareaOptions;
+  /** 外へ知らせる先。options に混ざって来るが、持ち回すのは別 */
+  private callbacks: Callbacks;
 
-  private composition: Composition | null = null;
+  /** 画面の側の状態。編集の状態と同じく、作り直して差し替える */
+  private screen = newScreenState;
 
-  // 本文と選択は doc が持つ。ここからは読むだけ
-  private get text(): string {
-    return this.doc.text;
-  }
-
-  private get caret(): Caret {
-    return this.doc.caret;
-  }
-
-  private get goal(): Goal {
-    return this.doc.goal;
-  }
-
-  private get anchor(): number {
-    return this.doc.selection.anchor;
-  }
-
-  private focused = false;
-  private caretOn = true;
-  private blinkTimer: ReturnType<typeof setInterval> | null = null;
-  private pointer: PointerGestures;
   private destroyed = false;
-  /** className で足したぶん。差し替えと後片付けのために覚えておく */
-  private ownClasses: string[] = [];
-  /** 選択の端につまみを出すか。指で触ったときだけ立てる */
-  private handles = false;
-  private disposers: (() => void)[] = [];
 
-  constructor(container: HTMLElement, options: TextareaOptions, createBackend: BackendFactory) {
+  constructor(container: HTMLElement, init: TextareaInit) {
+    const backend = init.backend;
     this.container = container;
-    this.callbacks = options;
-    this.options = resolveOptions(options);
-
-    if (getComputedStyle(container).position === "static") {
-      container.style.position = "relative";
-    }
-    container.style.overflow = "hidden";
-    // 器の寸法を読むのは backend なので、作る前に当てておく
-    this.applyClassName(this.options.className);
-
-    this.backend = createBackend(container, this.options);
-
-    this.input = new HiddenInput(container, {
-      insert: (text) => this.handleInsert(text),
-      compositionStart: () => this.handleCompositionStart(),
-      compositionUpdate: (text, from, to) => this.handleCompositionUpdate(text, from, to),
-      compositionEnd: (text) => this.handleCompositionEnd(text),
-      keyDown: (event) => this.handleKeyDown(event),
-      copy: () => this.selectedText,
-      cut: () => this.handleCut(),
-      paste: (text) => this.handleInsert(text),
-      focus: () => this.handleFocus(),
-      blur: () => this.handleBlur(),
-    });
-    this.input.setReadOnly(this.options.readOnly);
-    this.input.setDisabled(this.options.disabled);
-
-    this.pointer = new PointerGestures(this.backend.surface, this.backend, this.backend, {
-      disabled: () => this.options.disabled,
-      placeCaret: (caret, extend) => this.moveCaret(caret, extend),
-      selectWord: (offset) => this.selectWord(offset),
-      showHandles: (show) => this.showHandles(show),
-      grabHandle: (edge) => this.grabHandle(edge),
-      selectParagraph: (offset) => this.selectParagraph(offset),
-      focus: () => this.input.focus(),
-    });
-    this.observeResize();
-
+    this.backend = backend;
+    this.callbacks = callbacksOf(init);
+    this.options = resolveOptions(init);
     // textarea と同じで、初期のキャレットは文頭に置く
-    this.doc = new TextDocument(options.value ?? "");
+    this.editState = newEditState(init.value ?? "");
+    this.commands = this.makeCommands();
+    this.can = this.makeCan();
+
+    this.input = new HiddenInput(container, this.inputHandlers(), this.options);
+    // 突いた場所が何文字目かと、戻す先を忘れるのに backend を聞く
+    this.pointer = new PointerGestures(backend.surface, backend, backend, this.pointerActions());
+
     this.sync();
   }
 
   // ---- 公開 API ----
 
-  get value(): string {
-    return this.doc.text;
-  }
-
-  set value(value: string) {
-    this.setValue(value);
-  }
-
-  setValue(value: string, options: SetValueOptions = {}): void {
-    if (!this.doc.reset(value, options.selection, options.keepHistory)) return;
-    this.composition = null;
-    this.sync();
-    if (options.notify) this.callbacks.onChange?.(this.doc.text);
-    this.callbacks.onSelectionChange?.(this.selection);
-  }
-
-  get selection(): Selection {
-    return this.doc.selection;
-  }
-
-  set selection(selection: Selection) {
-    this.setSelection(selection.anchor, selection.focus);
-  }
-
-  setSelection(anchor: number, focus = anchor): void {
-    this.doc.setSelection(anchor, focus);
-    this.afterSelectionChange();
-  }
-
-  selectAll(): void {
-    this.doc.selectAll();
-    this.afterSelectionChange();
-  }
-
-  get selectedText(): string {
-    return this.doc.selectedText;
-  }
-
-  /** 選択を切り取って返す。自前のメニューやボタンから使う */
-  cut(): string {
-    return this.handleCut();
-  }
-
-  insertText(text: string): void {
-    this.handleInsert(text);
+  /** いまの中身。読むだけの写しで、ここを触っても本文は動かない */
+  get state(): TextareaState {
+    return {
+      value: this.editState.text,
+      selection: selection(this.editState),
+      selectedText: selectedText(this.editState),
+      composing: composing(this.editState),
+    };
   }
 
   focus(): void {
@@ -180,34 +149,12 @@ export class Textarea {
     this.input.blur();
   }
 
-  undo(): void {
-    if (!this.doc.undo()) return;
-    this.composition = null;
-    this.afterEdit();
-  }
-
-  redo(): void {
-    if (!this.doc.redo()) return;
-    this.composition = null;
-    this.afterEdit();
-  }
-
-  get canUndo(): boolean {
-    return this.doc.canUndo;
-  }
-
-  get canRedo(): boolean {
-    return this.doc.canRedo;
-  }
-
   setOptions(options: TextareaOptions): void {
-    this.callbacks = { ...this.callbacks, ...options };
-    this.options = resolveOptions(this.callbacks);
-    this.applyClassName(this.options.className);
+    // どちらも差分で来る。前のものに重ねる
+    this.callbacks = { ...this.callbacks, ...callbacksOf(options) };
+    this.options = resolveOptions({ ...this.options, ...options });
     this.backend.setOptions(this.options);
-    this.input.setReadOnly(this.options.readOnly);
-    this.input.setDisabled(this.options.disabled);
-    this.startBlink();
+    this.input.setOptions(this.options);
     this.sync();
   }
 
@@ -217,390 +164,210 @@ export class Textarea {
   }
 
   set scrollOffset(value: number) {
+    // 外から送った先が見たい位置。突いた場所へは戻さない (ホイールと同じ扱い)。
+    // 解かないと、次にコンテナが変わったとき follow が元の位置へ巻き戻す
+    this.backend.forgetAnchor();
     this.backend.scrollOffset = value;
   }
 
-  /** 折り返しを含めた視覚行の数 */
-  get lineCount(): number {
-    return this.backend.lineCount;
-  }
-
-  /** キャレットの居場所。container が原点 */
-  /** 選択の外接矩形。container 基準。選択が無ければ null */
+  /**
+   * 選択の外接矩形。**container 基準**。選択が無ければ null。
+   *
+   * クライアント座標にしないのは、「キャレットや選択がコンテナの中に収まっているか」を
+   * 言うのがこちらの方が素直だから。画面に浮かせるときは `container` の矩形を足す
+   */
   get selectionRect(): CaretRect | null {
-    const [from, to] = this.range();
+    const [from, to] = range(this.editState);
     return this.backend.selectionRect(from, to);
   }
 
+  /** キャレットの居場所。container が原点 */
   get caretRect(): CaretRect {
-    return this.backend.caretRect(this.displayCaret());
-  }
-
-  destroy(): void {
-    if (this.destroyed) return;
-    this.destroyed = true;
-    this.stopBlink();
-    for (const dispose of this.disposers) dispose();
-    this.disposers.length = 0;
-    this.pointer.destroy();
-    this.input.destroy();
-    this.backend.destroy();
-    this.applyClassName("");
-  }
-
-  /** 自分で足したぶんだけ外して、新しいぶんを足す。元から付いていたものは触らない */
-  private applyClassName(className: string): void {
-    const next = className.split(/\s+/).filter(Boolean);
-    for (const name of this.ownClasses) {
-      if (!next.includes(name)) this.container.classList.remove(name);
-    }
-    for (const name of next) this.container.classList.add(name);
-    this.ownClasses = next;
-  }
-
-  // ---- 入力 ----
-
-  /** つまみの出し入れ。指で触ったら出し、打ったら引っ込める */
-  private showHandles(show: boolean): void {
-    if (this.handles === show) return;
-    this.handles = show;
-    this.sync();
+    return this.backend.caretRect(displayCaret(this.editState));
   }
 
   /**
-   * つまみを掴んだ。動かす側を focus に、反対の端を anchor に置き直す。
-   * あとは伸ばすだけになるので、掴んだあとの扱いはドラッグと同じ
-   */
-  private grabHandle(handle: Handle): void {
-    const [from, to] = this.range();
-    this.setSelection(handle === "start" ? to : from, handle === "start" ? from : to);
-  }
-
-  private handleInsert(raw: string): void {
-    this.handles = false;
-    if (this.options.readOnly || this.options.disabled) return;
-    const text = normalize(raw);
-    if (!text) return;
-    const [from, to] = this.range();
-    this.replace(from, to, text, "input");
-  }
-
-  private handleCut(): string {
-    const selected = this.selectedText;
-    if (!this.options.readOnly && !this.options.disabled && selected) {
-      const [from, to] = this.range();
-      this.replace(from, to, "", "delete");
-    }
-    return selected;
-  }
-
-  private handleCompositionStart(): void {
-    if (this.options.readOnly || this.options.disabled) return;
-    const [from, to] = this.range();
-    if (from !== to) this.replace(from, to, "", "delete");
-    this.doc.breakCoalescing();
-    this.composition = { start: this.caret.offset, text: "", activeStart: 0, activeEnd: 0 };
-    this.sync();
-  }
-
-  private handleCompositionUpdate(text: string, activeStart: number, activeEnd: number): void {
-    if (!this.composition) return;
-    this.composition = { ...this.composition, text, activeStart, activeEnd };
-    this.sync();
-  }
-
-  private handleCompositionEnd(text: string): void {
-    const composition = this.composition;
-    this.composition = null;
-    if (!composition) return;
-    if (text) this.replace(composition.start, composition.start, normalize(text), "other");
-    else this.sync();
-  }
-
-  private handleKeyDown(event: KeyboardEvent): void {
-    this.handles = false;
-    if (this.options.disabled) return;
-    const command = commandFor(strokeOf(event), this.options.writingMode);
-    if (!command) return;
-    event.preventDefault();
-    this.run(command);
-  }
-
-  /** キーの割り当ては keymap.ts。ここは動かし方だけ持つ */
-  private run(command: Command): void {
-    switch (command.type) {
-      case "stepInline":
-        this.stepInline(command.direction, command.word, command.extend);
-        break;
-      case "lineEdge":
-        this.moveCaret(this.backend.lineEdge(this.caret, command.edge), command.extend);
-        break;
-      case "docEdge": {
-        const caret: Caret =
-          command.edge === "end"
-            ? { offset: this.text.length, preferEnd: true }
-            : { offset: 0, preferEnd: false };
-        this.moveCaret(caret, command.extend);
-        break;
-      }
-      case "paragraphEdge":
-        this.moveCaret(this.paragraphEdge(command.direction), command.extend);
-        break;
-      case "moveAcross":
-        this.moveAcross(command.direction, command.extend);
-        break;
-      case "page": {
-        const result = this.movePage(command.direction);
-        this.moveCaret(result.caret, command.extend, result.goal);
-        break;
-      }
-      case "delete":
-        this.deleteBy(command.direction, command.word);
-        break;
-      case "insert":
-        this.handleInsert(command.text);
-        break;
-      case "selectAll":
-        this.selectAll();
-        break;
-      case "undo":
-        this.undo();
-        break;
-      case "redo":
-        this.redo();
-        break;
-    }
-  }
-
-  private deleteBy(direction: 1 | -1, byWord: boolean): void {
-    if (this.options.readOnly || this.options.disabled) return;
-    if (!this.doc.deleteBy(direction, byWord, this.options.maxLength)) return;
-    this.resetBlink();
-    this.afterEdit();
-  }
-
-  private replace(from: number, to: number, insert: string, kind: EditKind): void {
-    if (!this.doc.replace(from, to, insert, kind, this.options.maxLength)) return;
-    this.resetBlink();
-    this.afterEdit();
-  }
-
-  /** 本文が動いたあとの後始末 */
-  private afterEdit(): void {
-    this.sync();
-    this.callbacks.onChange?.(this.doc.text);
-    this.callbacks.onSelectionChange?.(this.selection);
-  }
-
-  // ---- 選択 ----
-
-  private range(): [number, number] {
-    return this.doc.range();
-  }
-
-  private moveCaret(caret: Caret, extend: boolean, goal: Goal = null): void {
-    this.doc.moveCaret(caret, extend, goal);
-    this.afterSelectionChange();
-  }
-
-  /** 矢印ひとつぶんの移動。軸が決まれば、刻みは修飾キーで決まる */
-  /**
-   * 行の中を 1 つ動く。縦書きでは下 / 上。
-   * 選んでいるときの 1 文字ぶんは、選んだ端に畳むだけで進まない (Blink も同じ)。
-   */
-  private stepInline(direction: 1 | -1, byWord: boolean, extend: boolean): void {
-    const [from, to] = this.range();
-    if (!extend && !byWord && from !== to) {
-      this.moveCaret(
-        { offset: direction === 1 ? to : from, preferEnd: this.caret.preferEnd },
-        false,
-      );
-      return;
-    }
-
-    const next = moveInline(this.text, this.caret, direction, byWord);
-    // 端に着いていて動けないなら何もしない。行を移るときの狙いも消さずに残す
-    const anchor = extend ? this.anchor : next.offset;
-    if (next.offset === this.caret.offset && anchor === this.anchor) return;
-    this.moveCaret(next, extend);
-  }
-
-  private moveAcross(direction: 1 | -1, extend: boolean): void {
-    const result = this.backend.moveAcross(this.caret, direction, this.goal);
-    this.moveCaret(result.caret, extend, result.goal);
-  }
-
-  /** 段落の頭 / 末へ。すでに端に居るなら隣の段落まで行く */
-  private paragraphEdge(direction: 1 | -1): Caret {
-    const at = this.caret.offset;
-    if (direction === -1) {
-      let start = this.text.lastIndexOf("\n", at - 1) + 1;
-      if (start === at) start = this.text.lastIndexOf("\n", at - 2) + 1;
-      return { offset: Math.max(0, start), preferEnd: false };
-    }
-    let end = this.text.indexOf("\n", at);
-    if (end === at) end = this.text.indexOf("\n", at + 1);
-    return { offset: end === -1 ? this.text.length : end, preferEnd: true };
-  }
-
-  private movePage(direction: 1 | -1): { caret: Caret; goal: Goal } {
-    let result = { caret: this.caret, goal: this.goal };
-    for (let i = 0; i < this.backend.linesPerPage(); i++) {
-      result = this.backend.moveAcross(result.caret, direction, result.goal);
-    }
-    return result;
-  }
-
-  private afterSelectionChange(): void {
-    this.resetBlink();
-    this.sync();
-    this.callbacks.onSelectionChange?.(this.selection);
-  }
-
-  // ---- ポインタ ----
-
-  private selectWord(offset: number): void {
-    const from = stepWord(this.text, Math.min(offset + 1, this.text.length), -1);
-    const to = stepWord(this.text, from, 1);
-    this.setSelection(from, to);
-  }
-
-  private selectParagraph(offset: number): void {
-    const from = this.text.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
-    const found = this.text.indexOf("\n", offset);
-    this.setSelection(from, found === -1 ? this.text.length : found);
-  }
-
-  // ---- 表示 ----
-
-  /** 変換中の文字を差し込んだ、画面に出すテキスト */
-  private displayText(): string {
-    const composition = this.composition;
-    if (!composition) return this.text;
-    return (
-      this.text.slice(0, composition.start) + composition.text + this.text.slice(composition.start)
-    );
-  }
-
-  /** 描画・当たり判定で使う、変換中の文字を含めたキャレット */
-  private displayCaret(): Caret {
-    const composition = this.composition;
-    if (!composition) return this.caret;
-    return { offset: composition.start + composition.activeEnd, preferEnd: true };
-  }
-
-  private compositionRange(): CompositionRange | null {
-    const composition = this.composition;
-    if (!composition || composition.text.length === 0) return null;
-    return {
-      start: composition.start,
-      end: composition.start + composition.text.length,
-      activeStart: composition.start + composition.activeStart,
-      activeEnd: composition.start + composition.activeEnd,
-    };
-  }
-
-  private viewState(): ViewState {
-    const [from, to] = this.range();
-    return {
-      text: this.displayText(),
-      selection: this.composition ? { start: 0, end: 0 } : { start: from, end: to },
-      caret: this.displayCaret(),
-      // 選択が伸びている間は出さない。textarea もそうなっている
-      caretVisible: this.caretOn && this.anchor === this.caret.offset,
-      focused: this.focused,
-      handles: this.handles && !this.composition,
-      composition: this.compositionRange(),
-      placeholder:
-        this.text.length === 0 && !this.composition && this.options.placeholder
-          ? this.options.placeholder
-          : null,
-    };
-  }
-
-  /** 組み直して、キャレットを見える位置に置く */
-  /**
-   * CSS を読み直して組み直す。
+   * CSS を読み直してレイアウトし直す。
    * 字の大きさ・余白・禁則を CSS で変えたら呼ぶ。
-   * 器の寸法だけなら ResizeObserver が拾うので要らない。
+   * コンテナの寸法だけなら ResizeObserver が拾うので要らない。
    */
   refresh(): void {
     this.backend.refresh();
     this.sync();
   }
 
-  protected sync(): void {
+  destroy(): void {
     if (this.destroyed) return;
-    const caret = this.displayCaret();
-    this.backend.update(this.viewState());
-    this.backend.ensureVisible(caret);
-    // 送りが落ち着いたいま、キャレットが画面のどこに居るかを控える。
-    // 次の組み直しで、そこへ戻す
-    this.backend.anchorCaret();
-
-    this.placeInput();
-  }
-
-  /** IME の候補ウィンドウをキャレットの隣に出させる */
-  private placeInput(): void {
-    this.input.moveTo(
-      this.backend.caretRect(this.displayCaret()),
-      this.options.writingMode,
-      this.backend.fontSize,
-    );
+    this.destroyed = true;
+    this.pointer.destroy();
+    this.input.destroy();
+    this.backend.destroy();
   }
 
   /**
-   * 器が変われば組み直る。隠し入力もキャレットの脇へ置き直す。
-   * 置いたままだと、キーボードで器が縮んだときに入力がその下へ取り残され、
-   * iOS が開いた直後にキーボードを閉じてしまう。
-   * backend より後に登録する。組み直った結果を見てから動かしたい
+   * 外から叩く編集の操作。`ops` の結果を `apply` に渡すだけ。
+   * ここに残るのは副作用の段取り——通知するか、つまみを引っ込めるか、何を返すか
    */
-  private observeResize(): void {
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      if (!this.destroyed && this.focused) this.placeInput();
-    });
-    observer.observe(this.container);
-    this.disposers.push(() => observer.disconnect());
+  private makeCommands(): TextareaCommands {
+    const ops = this.ops;
+    return {
+      setValue: (value, options = {}) =>
+        this.apply(ops.setValue(value, options), options.notify ?? false),
+      setSelection: (anchor, focus = anchor) => this.apply(ops.setSelection(anchor, focus)),
+      selectAll: () => this.apply(ops.selectAll()),
+      insertText: (text) => this.handleInsert(text),
+      cut: () => {
+        const result = ops.cut();
+        this.apply(result);
+        return result.text;
+      },
+      undo: () => this.apply(ops.undo()),
+      redo: () => this.apply(ops.redo()),
+    };
+  }
+
+  /**
+   * 同じ表を「動くか」に読み替える。**操作を走らせて、state が動くかだけを見る。**
+   * `edit/` は副作用を持たないので、走らせても何も起きない——
+   * これが `can` を別に書かずに済む理由。
+   *
+   * 足し忘れは型が止める。`TextareaCan` は `TextareaCommands` から導いてある
+   */
+  private makeCan(): TextareaCan {
+    const ops = this.ops;
+    const dryRun =
+      <A extends unknown[]>(op: (...args: A) => Result) =>
+      (...args: A): boolean =>
+        op(...args).changed !== null;
+    return {
+      setValue: dryRun(ops.setValue),
+      setSelection: dryRun(ops.setSelection),
+      selectAll: dryRun(ops.selectAll),
+      insertText: dryRun(ops.insertText),
+      cut: dryRun(ops.cut),
+      undo: dryRun(ops.undo),
+      redo: dryRun(ops.redo),
+    };
+  }
+
+  /**
+   * 隠し入力から来る出来事の行き先。
+   * 「打つ・変換する・キーを押す」は編集操作へ、focus は画面の状態へ。
+   * `caretAnchor` だけは逆向きで、受け口から読みに来るもの
+   */
+  private inputHandlers(): HiddenInputHandlers {
+    return {
+      insert: (text) => this.handleInsert(text),
+      compositionStart: () => this.apply(beginComposition(this.editState, this.limits())),
+      compositionUpdate: (text, from, to) =>
+        this.apply(updateComposition(this.editState, text, from, to)),
+      compositionEnd: (text) => this.apply(endComposition(this.editState, text, this.limits())),
+      keyDown: (command) => this.handleKeyDown(command),
+      caretAnchor: () => ({
+        rect: this.backend.caretRect(displayCaret(this.editState)),
+        size: this.backend.fontSize,
+      }),
+      copy: () => selectedText(this.editState),
+      cut: () => this.commands.cut(),
+      paste: (text) => this.handleInsert(text),
+      focus: () => this.handleFocus(),
+      blur: () => this.handleBlur(),
+    };
+  }
+
+  /** 指とマウスから来る出来事の行き先。つまみの出し入れだけが画面の状態 */
+  private pointerActions(): PointerActions {
+    return {
+      disabled: () => this.options.disabled,
+      placeCaret: (caret, extend) => this.apply(moveCaret(this.editState, caret, extend)),
+      selectWord: (offset) => this.apply(selectWord(this.editState, offset)),
+      selectParagraph: (offset) => this.apply(selectParagraph(this.editState, offset)),
+      grabHandle: (edge) => this.apply(grabHandle(this.editState, edge)),
+      showHandles: (show) => this.applyScreen(showHandles(this.screen, show)),
+      focus: () => this.input.focus(),
+    };
+  }
+
+  // ---- 動いたあとの後始末 ----
+
+  private limits(): Limits {
+    return {
+      editable: !this.options.readOnly && !this.options.disabled,
+      maxLength: this.options.maxLength,
+    };
+  }
+
+  /**
+   * 動いた state を差し替えて、画面に出して、外へ知らせる。
+   * **state が変わる場所はここだけ。**
+   *
+   * onChange を呼ぶかは、setValue だけが約束を違える (既定では呼ばない)
+   */
+  private apply(result: Result, announce = true): void {
+    if (!result.changed) return;
+    this.editState = result.state;
+    this.sync();
+    if (result.changed === "edit" && announce) this.callbacks.onChange?.(this.editState.text);
+    if (result.changed !== "view") this.callbacks.onSelectionChange?.(selection(this.editState));
+  }
+
+  /** 画面の状態が動いた。外へは知らせないので、描き直すだけ */
+  private applyScreen(next: ScreenState): void {
+    if (next === this.screen) return;
+    this.screen = next;
+    this.redraw();
+  }
+
+  // ---- 受け口 ----
+
+  private handleInsert(text: string): void {
+    this.hideHandles();
+    this.apply(this.ops.insertText(text));
+  }
+
+  /** 割り当ての無いキーも来る。打ったらつまみを引っ込めるため */
+  private handleKeyDown(command: Command | null): void {
+    this.hideHandles();
+    if (!command || this.options.disabled) return;
+    this.apply(runCommand(this.editState, command, this.backend, this.limits()));
   }
 
   private handleFocus(): void {
-    this.focused = true;
-    this.startBlink();
+    this.screen = setFocused(this.screen, true);
     this.sync();
     this.callbacks.onFocus?.();
   }
 
   private handleBlur(): void {
-    this.focused = false;
+    this.screen = setFocused(this.screen, false);
     this.pointer.cancelDrag();
-    this.stopBlink();
-    this.doc.breakCoalescing();
+    // 打ちかけのまとまりを切る。本文も選択も動かないので apply は通さない
+    this.editState = breakCoalescing(this.editState);
     this.sync();
     this.callbacks.onBlur?.();
   }
 
-  private startBlink(): void {
-    this.stopBlink();
-    this.caretOn = true;
-    const interval = this.options.caretBlinkInterval;
-    if (interval <= 0) return;
-    this.blinkTimer = setInterval(() => {
-      this.caretOn = !this.caretOn;
-      if (!this.destroyed) this.backend.update(this.viewState());
-    }, interval);
+  /** 打ったらつまみを引っ込める。描き直しは続く apply に任せる */
+  private hideHandles(): void {
+    this.screen = showHandles(this.screen, false);
   }
 
-  private stopBlink(): void {
-    if (this.blinkTimer !== null) clearInterval(this.blinkTimer);
-    this.blinkTimer = null;
-    this.caretOn = true;
+  // ---- 表示 ----
+
+  private viewState(): ViewState {
+    return buildViewState(viewContent(this.editState), this.screen, this.options.placeholder);
   }
 
-  private resetBlink(): void {
-    if (this.focused) this.startBlink();
+  /** 本文や選択が動いた。描き直して、キャレットを見える位置に置いてもらう */
+  private sync(): void {
+    if (this.destroyed) return;
+    this.backend.show(this.viewState());
+    this.input.followCaret();
+  }
+
+  /** 点滅だけの描き直し。送りは動かさない */
+  private redraw(): void {
+    if (this.destroyed) return;
+    this.backend.update(this.viewState());
   }
 }
-
-/** 改行を \n に揃える。textarea もクリップボードも \r\n を投げてくる */

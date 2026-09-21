@@ -1,8 +1,9 @@
-import type { Caret, Goal } from "../../model/movement";
+import type { Caret, Goal } from "../../text/caret";
 import type { ResolvedOptions } from "../../types";
 import type { Backend, CaretRect, Handle, ViewState } from "../backend";
+import { CaretBlink } from "../blink";
+import { ContainerStyle } from "../container";
 import { fontBoxSize } from "../font-box";
-import { readScroll, writeScroll } from "../scroll";
 import {
   caretGeometry,
   contentBreadth,
@@ -17,6 +18,7 @@ import { type Layout, layoutText } from "./layout";
 import { CanvasMeasurer, cssFont } from "./measure";
 import { moveAcrossLines, moveToLineEdge } from "./movement";
 import { Renderer } from "./renderer";
+import { CanvasScroller, type ScrollHost } from "./scroller";
 import type { CanvasStyle } from "./style";
 
 /** 字を 1 つずつ canvas に置く。行分割も禁則も字の向きも自前 */
@@ -37,11 +39,13 @@ export class CanvasBackend implements Backend {
   private layout: Layout = { lines: [], maxLineLength: 0 };
   private placeholderLayout: Layout | null = null;
   private state: ViewState | null = null;
-  /** 字の大きさや器の寸法が変わったら組み直す */
+  private blink = new CaretBlink(() => this.schedule());
+  private containerStyle: ContainerStyle;
+  private scroller: CanvasScroller;
+  /** 字の大きさやコンテナの寸法が変わったらレイアウトし直す */
   private needsLayout = true;
 
   private frame = 0;
-  private followFrame = 0;
   private resizeObserver: ResizeObserver | null = null;
   private destroyed = false;
   private disposers: (() => void)[] = [];
@@ -53,6 +57,10 @@ export class CanvasBackend implements Backend {
     private style: CanvasStyle,
   ) {
     this.options = options;
+    // 中身を絶対配置で重ねるので、コンテナに位置の基準を入れてから作る。
+    // 寸法を CSS から読むので、クラスも読む前に当てる
+    this.containerStyle = new ContainerStyle(container);
+    this.containerStyle.setClassName(options.className);
     const doc = container.ownerDocument;
 
     // 描く面は下に敷く。上に重なるスクロールコンテナは透明なので素通しで見え、
@@ -84,7 +92,7 @@ export class CanvasBackend implements Backend {
 
     const { font, padding } = this.style;
     this.measurer = new CanvasMeasurer(ctx, font);
-    this.renderer = new Renderer(ctx, options, this.style);
+    this.renderer = new Renderer(ctx, () => this.options, this.style);
     this.geometry = {
       writingMode: options.writingMode,
       width: 0,
@@ -96,9 +104,8 @@ export class CanvasBackend implements Backend {
       scroll: 0,
     };
 
+    this.scroller = new CanvasScroller(this.scrollHost());
     this.applySurfaceStyles();
-    this.bindScroll();
-    this.bindWheel();
     this.observeResize();
     this.syncSize();
   }
@@ -112,7 +119,7 @@ export class CanvasBackend implements Backend {
 
   setOptions(options: ResolvedOptions): void {
     this.options = options;
-    this.renderer.setOptions(options);
+    this.containerStyle.setClassName(options.className);
     // 寸法は生成時に凍っているので、ここで動くのは writingMode と色だけ
     this.geometry = { ...this.geometry, writingMode: options.writingMode };
     this.needsLayout = true;
@@ -181,37 +188,54 @@ export class CanvasBackend implements Backend {
     return moveToLineEdge(this.layout, caret, edge);
   }
 
-  /** 送り方向に読み進んだ量。向きに依らず 0 以上 */
+  // ---- 送り。中身は CanvasScroller ----
+
+  /** 送りがレイアウトから引くもの。レイアウトのたびに変わるので、値ではなく読み方を渡す */
+  private scrollHost(): ScrollHost {
+    return {
+      surface: this.surface,
+      vertical: () => this.vertical,
+      lineHeight: () => this.geometry.lineHeight,
+      visibleBreadth: () => contentBreadth(this.geometry),
+      totalBreadth: () => totalBreadth(this.layout, this.geometry),
+      lineOf: (caret) => lineIndexOfOffset(this.layout, caret.offset, caret.preferEnd),
+      blockCenterOf: (caret) => {
+        const rect = this.caretRect(caret);
+        return this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+      },
+      scrolled: () => this.syncScroll(),
+      state: () => this.state,
+    };
+  }
+
   get scrollOffset(): number {
-    return readScroll(this.surface, this.vertical);
+    return this.scroller.scrollOffset;
   }
 
   set scrollOffset(value: number) {
-    const next = this.clampScroll(value);
-    writeScroll(this.surface, this.vertical, next);
-    this.syncScroll();
+    this.scroller.scrollOffset = value;
   }
 
-  ensureVisible(caret: Caret): void {
-    const breadth = contentBreadth(this.geometry);
-    if (breadth === 0) return;
-    const index = lineIndexOfOffset(this.layout, caret.offset, caret.preferEnd);
-    const { lineHeight } = this.geometry;
-    // 送りぶんを引く前の、行の手前と奥 (block 方向)。縦書きなら右端と左端
-    const near = lineHeight * index;
-    const far = near + lineHeight;
+  show(state: ViewState): void {
+    // 本文や選択が動いた。キャレットは出た状態から数え直す
+    this.blink.sync(state.focused, this.options.caretBlinkInterval);
+    this.update(state);
+    this.scroller.ensureVisible(state.caret);
+    // 送りが落ち着いたいま、キャレットが画面のどこに居るかを控える。
+    // 次のレイアウトで、そこへ戻す
+    this.scroller.anchorCaret();
+  }
 
-    let scroll = this.scrollOffset;
-    if (near - scroll < 0) scroll = near;
-    else if (far - scroll > breadth) scroll = far - breadth;
-
-    this.scrollOffset = scroll;
+  forgetAnchor(): void {
+    this.scroller.forgetAnchor();
   }
 
   destroy(): void {
+    this.blink.stop();
+    this.containerStyle.destroy();
     this.destroyed = true;
     if (this.frame) cancelAnimationFrame(this.frame);
-    if (this.followFrame) cancelAnimationFrame(this.followFrame);
+    this.scroller.destroy();
     this.resizeObserver?.disconnect();
     for (const dispose of this.disposers) dispose();
     this.disposers.length = 0;
@@ -242,11 +266,11 @@ export class CanvasBackend implements Backend {
     } satisfies Partial<CSSStyleDeclaration>);
   }
 
-  /** スクロールできる量を maxScroll に合わせる。器のぶんを足した大きさが要る */
+  /** スクロールできる量を maxScroll に合わせる。コンテナのぶんを足した大きさが要る */
   private syncSpacer(): void {
     const vertical = this.vertical;
     const visible = vertical ? this.surface.clientWidth : this.surface.clientHeight;
-    const extent = visible + this.maxScroll();
+    const extent = visible + this.scroller.maxScroll();
     Object.assign(this.spacer.style, {
       width: vertical ? `${extent}px` : "1px",
       height: vertical ? "1px" : `${extent}px`,
@@ -261,115 +285,24 @@ export class CanvasBackend implements Backend {
     this.schedule();
   }
 
-  private bindScroll(): void {
-    const listener = () => this.syncScroll();
-    this.surface.addEventListener("scroll", listener, { passive: true });
-    this.disposers.push(() => this.surface.removeEventListener("scroll", listener));
-  }
-
-  private bindWheel(): void {
-    const listener = (event: WheelEvent) => {
-      if (this.maxScroll() <= 0) return;
-      event.preventDefault();
-      // 自分で送った先が見たい位置。突いた場所へは戻さない
-      this.forgetAnchor();
-      // 縦組みで「下へ回す = 左へ読み進む」になるかはエンジン任せにできない。
-      // タッチのパンは touch-action に任せてあるので、ここは通らない
-      this.scrollOffset =
-        this.scrollOffset + (this.vertical ? event.deltaY - event.deltaX : event.deltaY);
-    };
-    this.surface.addEventListener("wheel", listener, { passive: false });
-    this.disposers.push(() => this.surface.removeEventListener("wheel", listener));
-  }
-
-  /** 次の組み直しで戻す先。突いた時点のキャレットの block 座標 */
-  private caretAnchor: { block: number; offset: number } | null = null;
-
-  anchorCaret(): void {
-    const state = this.state;
-    if (!state) {
-      this.caretAnchor = null;
-      return;
-    }
-    this.caretAnchor = { block: this.blockCenterOf(state.caret), offset: state.caret.offset };
-  }
-
-  forgetAnchor(): void {
-    this.caretAnchor = null;
-  }
-
-  /** 行送り方向の中心。縦書きなら列の中心 x、横書きなら行の中心 y */
-  private blockCenterOf(caret: Caret): number {
-    const rect = this.caretRect(caret);
-    return this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
-  }
-
-  /**
-   * キャレットの block 座標を anchor に戻す。
-   * 送りの自由度は block 方向しかないので、inline 方向 (縦書きなら y) は組み方任せ
-   */
-  private keepCaretAt(caret: Caret, anchor: number): void {
-    const current = this.blockCenterOf(caret);
-    const scroll = this.scrollOffset;
-    // 符号は ensureVisible と同じ規則。縦書きは送りを増やすと x も増える
-    this.scrollOffset = this.vertical ? scroll + (anchor - current) : scroll - (anchor - current);
-  }
-
-  /**
-   * キャレットを追う。同期パスと rAF が同じ答えを出すように、判断はここだけに置く。
-   * アンカーは使っても捨てない。キーボードは何段階かに分けて器を縮めてくるので、
-   * 1 回使っただけで捨てると 2 段目から戻す先を失う
-   */
-  private follow(): void {
-    const state = this.state;
-    if (this.destroyed || !state) return;
-    const anchor = this.caretAnchor;
-    if (anchor) {
-      // キャレットがあの時のままなら、その場に戻す
-      if (anchor.offset === state.caret.offset) this.keepCaretAt(state.caret, anchor.block);
-      else this.caretAnchor = null;
-    }
-    // 焦点が無いならキャレットを見せる理由もない。キーボードが閉じたあとの
-    // 組み直しはここを通る。戻す先があればそれで足りている
-    if (!state.focused) return;
-    // 戻す先が器の外に出ることがある。キーボードは行送り方向に潰してくるので、
-    // 潰れた側を叩いていると戻す先がそのまま画面の外になる。最後に必ず入れ直す
-    this.ensureVisible(state.caret);
-  }
-
-  /**
-   * 確定した寸法でもう一度追う保険。
-   * 器が変われば列数も変わり、送れる上限 (maxScroll) も変わる。
-   * 同期パスで送りきれていれば同じ値になり、見た目には何も起きない
-   */
-  private scheduleFollow(): void {
-    const view = this.container.ownerDocument.defaultView;
-    if (!view) return;
-    if (this.followFrame) view.cancelAnimationFrame(this.followFrame);
-    this.followFrame = view.requestAnimationFrame(() => {
-      this.followFrame = 0;
-      this.follow();
-    });
-  }
-
   private observeResize(): void {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
-      // 器が変われば行の長さも変わって全部組み直る。
+      // コンテナが変われば行の長さも変わって全部レイアウトし直される。
       // 送れる上限を先に直しておかないと、このあとの送りが古い上限で丸められる
       this.syncGeometry();
       // 書いている最中なら、キャレットが画面の外に流れないように追う。
       // ここで正解が出るので、rAF は丸められていたときの保険で足りる
-      this.follow();
-      this.scheduleFollow();
+      this.scroller.follow();
+      this.scroller.scheduleFollow();
       this.schedule();
     });
     this.resizeObserver.observe(this.container);
   }
 
   /**
-   * 寸法 → 組み直し → 送れる上限 の順に揃える。
-   * 上限は組み上がりから決まるので、組み直したあとでないと古い値のままになる。
+   * 寸法 → レイアウト → 送れる上限 の順に揃える。
+   * 上限はレイアウトの結果から決まるので、レイアウトし直したあとでないと古い値のままになる。
    * そのあとに送ると、送りがその古い上限で丸められる
    */
   private syncGeometry(): void {
@@ -421,14 +354,6 @@ export class CanvasBackend implements Backend {
     this.needsLayout = false;
   }
 
-  private maxScroll(): number {
-    return Math.max(0, totalBreadth(this.layout, this.geometry) - contentBreadth(this.geometry));
-  }
-
-  private clampScroll(value: number): number {
-    return value < 0 ? 0 : Math.min(value, this.maxScroll());
-  }
-
   private schedule(): void {
     if (this.destroyed || this.frame) return;
     const view = this.container.ownerDocument.defaultView;
@@ -449,7 +374,7 @@ export class CanvasBackend implements Backend {
         layout: this.layout,
         geometry: this.geometry,
         selection: state.selection,
-        caret: state.caretVisible ? state.caret : null,
+        caret: state.caretVisible && this.blink.on ? state.caret : null,
         focused: state.focused,
         composition: state.composition,
         placeholder: this.placeholderLayout,

@@ -20,7 +20,7 @@ export function Textarea(props: TextareaProps) {
   useSyncedValue(editorRef, value);
   useSyncedOptions(editorRef, useStableOptions(props));
   useEditorHandle(ref, editorRef);
-  // 組み直しは最後。値と設定を入れたあとの姿で読み直す
+  // レイアウトは最後。値と設定を入れたあとの姿で読み直す
   useRefreshOnRender(editorRef);
 
   return <div ref={containerRef} className={className} style={{ ...fillStyle, ...style }} />;

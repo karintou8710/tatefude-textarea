@@ -3,7 +3,10 @@ import type {
   CaretRect,
   Textarea as CoreEditor,
   Selection,
+  TextareaCan,
+  TextareaCommands,
   TextareaOptions,
+  TextareaState,
 } from "tatefude-textarea";
 
 /** core の設定のうち、DOM 側の関心ごとを除いたもの */
@@ -29,17 +32,16 @@ export interface TextareaProps extends StyleOptions {
 export interface TextareaHandle {
   focus(): void;
   blur(): void;
-  insertText(text: string): void;
-  /** 選択を切り取って返す */
-  cut(): string;
-  selectAll(): void;
-  /** いま選ばれている文字列 */
-  readonly selectedText: string;
+  /** いまの中身。読むだけの写し */
+  readonly state: TextareaState;
+  /** 編集の操作。本文と選択を動かすものは全部ここから */
+  readonly commands: TextareaCommands;
+  /** その操作がいま何か動かすか。ボタンの出し入れに使う */
+  readonly can: TextareaCan;
   /** 選択の外接矩形。container 基準。選択が無ければ null */
   readonly selectionRect: CaretRect | null;
-  setSelection(anchor: number, focus?: number): void;
-  undo(): void;
-  redo(): void;
+  /** エディタを置いた要素。矩形を画面の座標に直すのに要る */
+  readonly container: HTMLElement | null;
   /** 逃げ道。core のインスタンスをそのまま触りたいとき */
   readonly editor: CoreEditor | null;
 }

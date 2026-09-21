@@ -1,24 +1,8 @@
+import type { Command } from "../edit/command";
 import type { WritingMode } from "../types";
 
 /** 字の並ぶ向き (inline) か、行の重なる向き (block) か */
 export type Axis = "inline" | "block";
-
-/**
- * キーを押した結果やること。何をどう動かすかだけで、動かし方は持たない。
- * こうしておくと「どのキーが何をするか」を node のテストで縛れる。
- */
-export type Command =
-  | { type: "stepInline"; direction: 1 | -1; word: boolean; extend: boolean }
-  | { type: "lineEdge"; edge: "start" | "end"; extend: boolean }
-  | { type: "docEdge"; edge: "start" | "end"; extend: boolean }
-  | { type: "paragraphEdge"; direction: 1 | -1; extend: boolean }
-  | { type: "moveAcross"; direction: 1 | -1; extend: boolean }
-  | { type: "page"; direction: 1 | -1; extend: boolean }
-  | { type: "delete"; direction: 1 | -1; word: boolean }
-  | { type: "insert"; text: string }
-  | { type: "selectAll" }
-  | { type: "undo" }
-  | { type: "redo" };
 
 /** KeyboardEvent から、割り当てに要るものだけ取り出した形 */
 export interface KeyStroke {

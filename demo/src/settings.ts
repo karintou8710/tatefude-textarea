@@ -24,7 +24,7 @@ export const defaultSettings: Settings = {
 };
 
 /**
- * 寸法と組み方はエディタが器の計算スタイルから読む。
+ * 寸法とレイアウトはエディタがコンテナの計算スタイルから読む。
  * つまみで動かすので、クラスではなく直接当てる。
  */
 export function editorStyle({ family, size, lineHeight, kinsoku }: Settings): CSSProperties {

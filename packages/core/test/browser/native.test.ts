@@ -1,8 +1,8 @@
 import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
-import { CanvasTextarea } from "../../src/backend/canvas/index";
 import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
-import { DomTextarea } from "../../src/backend/dom/index";
+import { CanvasTextarea } from "../../src/canvas";
+import { DomTextarea } from "../../src/dom";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions } from "../../src/types";
 import { applyStyle, canvasStyle } from "./style";
@@ -107,11 +107,11 @@ async function traceOurs(
 ) {
   const target = ours(Ctor, value);
   target.editor.focus();
-  target.editor.setSelection(start);
+  target.editor.commands.setSelection(start);
   const steps: string[] = [];
   for (const stroke of keys) {
     await userEvent.keyboard(rotate(stroke));
-    const { anchor, focus } = target.editor.selection;
+    const { anchor, focus } = target.editor.state.selection;
     steps.push(`${stroke} [${Math.min(anchor, focus)},${Math.max(anchor, focus)}]`);
   }
   return steps;

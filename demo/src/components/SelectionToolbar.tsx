@@ -23,12 +23,13 @@ export function SelectionToolbar({ editor, writingMode, selection }: Props) {
 
   useEffect(() => {
     const menu = menuRef.current;
-    const container = editor?.editor?.container;
+    const container = editor?.container;
     // 選択が変われば矩形も変わる。autoUpdate は送りと寸法しか見ないので、
     // 選択そのものは依存に入れて置き直す
     if (!menu || !container || selection.anchor === selection.focus) return;
 
-    // 選択は要素ではないので、矩形だけを持つ仮想要素として渡す
+    // 選択は要素ではないので、矩形だけを持つ仮想要素として渡す。
+    // selectionRect は container 基準なので、画面の座標に直してから渡す
     const anchor = {
       getBoundingClientRect: () => {
         const box = container.getBoundingClientRect();
@@ -61,29 +62,29 @@ export function SelectionToolbar({ editor, writingMode, selection }: Props) {
   if (!editor || !shown) return null;
 
   const copy = async () => {
-    await writeClipboard(editor.selectedText);
+    await writeClipboard(editor.state.selectedText);
   };
 
   const cut = async () => {
-    const text = editor.cut();
+    const text = editor.commands.cut();
     if (text) await writeClipboard(text);
   };
 
   const paste = async () => {
     // iOS はここで OS の確認ボタンを出す。読めなければ何もしない
     const text = await navigator.clipboard.readText().catch(() => "");
-    if (text) editor.insertText(text);
+    if (text) editor.commands.insertText(text);
   };
 
   return (
     <div
       ref={menuRef}
       className={styles.menu}
-      // 押しても焦点を奪わない。奪うとキーボードが閉じて選択も消える
+      // 押しても focus を奪わない。奪うとキーボードが閉じて選択も消える
       onPointerDown={(event) => event.preventDefault()}
     >
       {/*
-        押したことにするのは pointerup。焦点を残すために pointerdown を止めると、
+        押したことにするのは pointerup。focus を残すために pointerdown を止めると、
         WebKit では合成マウスイベントごと消えて click が来ない
       */}
       <button type="button" onPointerUp={cut}>
@@ -95,7 +96,7 @@ export function SelectionToolbar({ editor, writingMode, selection }: Props) {
       <button type="button" onPointerUp={paste} disabled={!canRead()}>
         ペースト
       </button>
-      <button type="button" onPointerUp={() => editor.selectAll()}>
+      <button type="button" onPointerUp={() => editor.commands.selectAll()}>
         全選択
       </button>
     </div>

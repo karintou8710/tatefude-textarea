@@ -68,7 +68,7 @@ export class CanvasMeasurer implements Measurer {
    * 立てた字の縦の送り。1em とは限らない。
    * フォントに縦組みの寸法 (vmtx) があればその値が使われ、無ければブラウザが
    * ascent + descent から作る。どちらも canvas の measureText からは引けないので、
-   * 同じ字を実際に縦組みで組ませて測る。落ちるフォントは字ごとに変わるので 1 字ずつ。
+   * 同じ字を実際に縦組みでレイアウトさせて測る。落ちるフォントは字ごとに変わるので 1 字ずつ。
    */
   private upright(text: string): number {
     const hit = this.uprightCache.get(text);

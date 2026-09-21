@@ -1,4 +1,4 @@
-import type { Caret } from "../../model/movement";
+import type { Caret } from "../../text/caret";
 import type { ResolvedOptions } from "../../types";
 import type { CompositionRange } from "../backend";
 import { isSmallKana } from "./char-class";
@@ -25,13 +25,14 @@ export interface RenderState {
 export class Renderer {
   constructor(
     private ctx: CanvasRenderingContext2D,
-    private options: ResolvedOptions,
+    /** 引きに行く。写しを持つと、当て直すものが無いのに同期が要る */
+    private readOptions: () => ResolvedOptions,
     /** 寸法は生成時に決まる。色は options 側なので動く */
     private style: CanvasStyle,
   ) {}
 
-  setOptions(options: ResolvedOptions): void {
-    this.options = options;
+  private get options(): ResolvedOptions {
+    return this.readOptions();
   }
 
   render(state: RenderState, devicePixelRatio: number): void {

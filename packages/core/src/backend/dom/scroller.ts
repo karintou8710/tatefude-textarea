@@ -1,13 +1,12 @@
-import type { Caret } from "../../model/movement";
-import type { CaretRect, Scroller, ViewState } from "../backend";
+import type { Caret } from "../../text/caret";
+import type { Scroller, ViewState } from "../backend";
 import { readScroll, writeScroll } from "../scroll";
-import { blockOfCaret } from "./axis";
 
 /**
- * 送りが組みから要るものは、これだけ。
+ * 送りがレイアウトから要るものは、これだけ。
  *
- * 値ではなく関数で受けるのは、どれも組み直しのたびに変わるため。
- * 掴んで持つと、器が縮んだあとに古い寸法で送ることになる。
+ * 値ではなく関数で受けるのは、どれもレイアウトのたびに変わるため。
+ * 掴んで持つと、コンテナが縮んだあとに古い寸法で送ることになる。
  */
 export interface ScrollHost {
   /** スクロールコンテナ。ホイールもここで拾う */
@@ -18,9 +17,13 @@ export interface ScrollHost {
   /** 送り方向の余白。手前と奥 */
   padStart(): number;
   padEnd(): number;
-  /** 組み上がりが送り方向に占める長さ */
+  /** レイアウトが送り方向に占める長さ */
   contentLength(): number;
-  caretRect(caret: Caret): CaretRect;
+  /**
+   * キャレットの行送り方向の中心 (surface 基準)。
+   * 送りの自由度は block 方向しかないので、矩形そのものは要らない
+   */
+  blockCenterOf(caret: Caret): number;
   /** いま表示している状態。まだ何も来ていなければ null */
   state(): ViewState | null;
 }
@@ -30,10 +33,10 @@ export interface ScrollHost {
  *
  * 慣性もラバーバンドもブラウザ側にあるので、ここがやるのは
  * 「いくつ送られているか」「どこまで送れるか」「どこへ戻すか」の 3 つ。
- * 組み方は知らないので、寸法は host から引く。
+ * レイアウトは知らないので、寸法は host から引く。
  */
 export class DomScroller implements Scroller {
-  /** 次の組み直しで戻す先。突いた時点のキャレットの block 座標 */
+  /** 次のレイアウトで戻す先。突いた時点のキャレットの block 座標 */
   private anchor: { block: number; offset: number } | null = null;
   private followFrame = 0;
   private disposers: (() => void)[] = [];
@@ -53,7 +56,7 @@ export class DomScroller implements Scroller {
     writeScroll(this.host.surface, this.host.vertical(), next);
   }
 
-  /** 器のうち、余白を除いて見えている長さ */
+  /** コンテナのうち、余白を除いて見えている長さ */
   visibleBreadth(): number {
     return this.visibleLength() - this.host.padStart() - this.host.padEnd();
   }
@@ -70,8 +73,8 @@ export class DomScroller implements Scroller {
     const padStart = this.host.padStart();
     const padEnd = this.host.padEnd();
 
-    // caretRect は送りぶんを含んでいるので、はみ出した差だけ足し引きする
-    const center = blockOfCaret(vertical, this.host.caretRect(caret));
+    // 中心は送りぶんを含んでいるので、はみ出した差だけ足し引きする
+    const center = this.host.blockCenterOf(caret);
     const near = center - lineHeight / 2;
     const far = center + lineHeight / 2;
     const scroll = this.scrollOffset;
@@ -90,7 +93,7 @@ export class DomScroller implements Scroller {
       this.anchor = null;
       return;
     }
-    this.anchor = { block: this.blockCenterOf(state.caret), offset: state.caret.offset };
+    this.anchor = { block: this.host.blockCenterOf(state.caret), offset: state.caret.offset };
   }
 
   forgetAnchor(): void {
@@ -99,7 +102,7 @@ export class DomScroller implements Scroller {
 
   /**
    * キャレットを追う。同期パスと rAF が同じ答えを出すように、判断はここだけに置く。
-   * アンカーは使っても捨てない。キーボードは何段階かに分けて器を縮めてくるので、
+   * アンカーは使っても捨てない。キーボードは何段階かに分けてコンテナを縮めてくるので、
    * 1 回使っただけで捨てると 2 段目から戻す先を失う
    */
   follow(): void {
@@ -111,17 +114,17 @@ export class DomScroller implements Scroller {
       if (anchor.offset === state.caret.offset) this.keepCaretAt(state.caret, anchor.block);
       else this.anchor = null;
     }
-    // 焦点が無いならキャレットを見せる理由もない。キーボードが閉じたあとの
-    // 組み直しはここを通る。戻す先があればそれで足りている
+    // focus が無いならキャレットを見せる理由もない。キーボードが閉じたあとの
+    // レイアウトはここを通る。戻す先があればそれで足りている
     if (!state.focused) return;
-    // 戻す先が器の外に出ることがある。キーボードは行送り方向に潰してくるので、
+    // 戻す先がコンテナの外に出ることがある。キーボードは行送り方向に潰してくるので、
     // 潰れた側を叩いていると戻す先がそのまま画面の外になる。最後に必ず入れ直す
     this.ensureVisible(state.caret);
   }
 
   /**
    * 確定した寸法でもう一度追う保険。
-   * 器が変われば列数も変わり、送れる上限 (maxScroll) も変わる。
+   * コンテナが変われば列数も変わり、送れる上限 (maxScroll) も変わる。
    * 同期パスで送りきれていれば同じ値になり、見た目には何も起きない
    */
   scheduleFollow(): void {
@@ -143,23 +146,18 @@ export class DomScroller implements Scroller {
     this.disposers.length = 0;
   }
 
-  /** 器の、送り方向の長さ。余白を含む */
+  /** コンテナの、送り方向の長さ。余白を含む */
   private visibleLength(): number {
     const { surface } = this.host;
     return this.host.vertical() ? surface.clientWidth : surface.clientHeight;
   }
 
-  /** 行送り方向の中心。縦書きなら列の中心 x、横書きなら行の中心 y */
-  private blockCenterOf(caret: Caret): number {
-    return blockOfCaret(this.host.vertical(), this.host.caretRect(caret));
-  }
-
   /**
    * キャレットの block 座標を anchor に戻す。
-   * 送りの自由度は block 方向しかないので、inline 方向 (縦書きなら y) は組み方任せ
+   * 送りの自由度は block 方向しかないので、inline 方向 (縦書きなら y) はレイアウト任せ
    */
   private keepCaretAt(caret: Caret, anchor: number): void {
-    const gap = anchor - this.blockCenterOf(caret);
+    const gap = anchor - this.host.blockCenterOf(caret);
     // 符号は ensureVisible と同じ規則
     this.scrollOffset = this.scrollOffset + (this.host.vertical() ? gap : -gap);
   }

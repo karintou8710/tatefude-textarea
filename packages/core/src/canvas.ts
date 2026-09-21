@@ -1,7 +1,7 @@
-import { Textarea } from "../../textarea";
-import type { TextareaOptions } from "../../types";
-import { CanvasBackend } from "./backend";
-import { type CanvasStyleOptions, resolveCanvasStyle } from "./style";
+import { CanvasBackend } from "./backend/canvas/backend";
+import { type CanvasStyleOptions, resolveCanvasStyle } from "./backend/canvas/style";
+import { Textarea } from "./textarea";
+import { resolveOptions, type TextareaOptions } from "./types";
 
 /**
  * 字を 1 つずつ canvas に置く実装。公開していない。
@@ -15,7 +15,11 @@ export class CanvasTextarea extends Textarea {
     options: TextareaOptions = {},
     style: CanvasStyleOptions = {},
   ) {
-    const resolvedStyle = resolveCanvasStyle(style);
-    super(container, options, (host, resolved) => new CanvasBackend(host, resolved, resolvedStyle));
+    const backend = new CanvasBackend(
+      container,
+      resolveOptions(options),
+      resolveCanvasStyle(style),
+    );
+    super(container, { ...options, backend });
   }
 }
