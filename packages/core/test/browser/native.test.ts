@@ -1,9 +1,11 @@
 import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 import { CanvasTextarea } from "../../src/backend/canvas/index";
+import type { CanvasStyleOptions } from "../../src/backend/canvas/style";
 import { DomTextarea } from "../../src/backend/dom/index";
 import type { Textarea } from "../../src/textarea";
 import type { TextareaOptions } from "../../src/types";
+import { applyStyle, canvasStyle } from "./style";
 
 /**
  * Blink の <textarea> を基準にする。
@@ -49,19 +51,19 @@ function native(value: string) {
   return element;
 }
 
-function ours(Ctor: new (host: HTMLElement, options: TextareaOptions) => Textarea, value: string) {
+function ours(
+  Ctor: new (host: HTMLElement, options: TextareaOptions, style?: CanvasStyleOptions) => Textarea,
+  value: string,
+) {
+  const style = { size: SIZE, lineHeight: LINE_HEIGHT, padding: PADDING, family: "serif" };
   const host = document.createElement("div");
   Object.assign(host.style, {
     width: `${BREADTH + PADDING * 2}px`,
     height: `${LENGTH + PADDING * 2}px`,
   });
+  applyStyle(host, style);
   document.body.appendChild(host);
-  const editor = new Ctor(host, {
-    value,
-    font: { size: SIZE, lineHeight: LINE_HEIGHT, family: "serif" },
-    padding: PADDING,
-    caretBlinkInterval: 0,
-  });
+  const editor = new Ctor(host, { value, caretBlinkInterval: 0 }, canvasStyle(style));
   cleanups.push(() => {
     editor.destroy();
     host.remove();

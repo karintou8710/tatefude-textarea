@@ -23,6 +23,8 @@ const geometry: Geometry = {
   padding: { top: 10, right: 10, bottom: 10, left: 10 },
   lineHeight: 18,
   em,
+  // 字の箱は em より少し大きい。キャレットの長さがこれに従うことを見る
+  textBox: 12,
   scroll: 0,
 };
 
@@ -77,15 +79,16 @@ describe("横書き", () => {
 });
 
 describe("キャレットの位置", () => {
-  // ネイティブと同じで、行ボックス全体 (= 行送り 18) を横切る
+  // ネイティブと同じで、長さは字の箱 (textBox 12) ぶん。行送り 18 との差 6 は
+  // 行の両側に 3 ずつ空くので、行の右端 172 から 3 ずらしたところに立つ
   it("行の中を下へ進む", () => {
-    expect(caretGeometry(layout, geometry, 0)).toEqual({ x: 172, y: 10, width: 18, height: 0 });
-    expect(caretGeometry(layout, geometry, 3)).toEqual({ x: 172, y: 40, width: 18, height: 0 });
+    expect(caretGeometry(layout, geometry, 0)).toEqual({ x: 175, y: 10, width: 12, height: 0 });
+    expect(caretGeometry(layout, geometry, 3)).toEqual({ x: 175, y: 40, width: 12, height: 0 });
   });
 
   it("折り返しの境目は preferEnd で行が変わる", () => {
-    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ x: 154, y: 10 });
-    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ x: 172, y: 90 });
+    expect(caretGeometry(layout, geometry, 8, false)).toMatchObject({ x: 157, y: 10 });
+    expect(caretGeometry(layout, geometry, 8, true)).toMatchObject({ x: 175, y: 90 });
   });
 
   it("横書きでは縦棒になる", () => {
@@ -97,8 +100,8 @@ describe("キャレットの位置", () => {
       kinsoku: false,
       writingMode: "horizontal-tb",
     });
-    // 横書きの送りは fakeMeasurer の字幅 (em の半分)
-    expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 10, width: 0, height: 18 });
+    // 横書きの送りは fakeMeasurer の字幅 (em の半分)。縦棒の長さは字の箱ぶん
+    expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 13, width: 0, height: 12 });
   });
 
   it("改行のあとは次の行の頭で確定する", () => {
@@ -135,7 +138,7 @@ describe("座標からキャレットへ", () => {
   it("キャレットの座標と往復する", () => {
     for (const offset of [0, 1, 5, 8, 9, 10]) {
       const rect = caretGeometry(layout, geometry, offset, true);
-      // 矩形は行ボックス全体なので、行を引くには中心を使う
+      // 矩形は行の真ん中に立つので、行を引くには中心を使う
       const center = rect.x + rect.width / 2;
       expect(offsetFromPoint(layout, geometry, center, rect.y + 1).offset).toBe(offset);
     }

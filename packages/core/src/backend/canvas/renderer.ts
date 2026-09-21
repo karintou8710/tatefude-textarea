@@ -6,6 +6,7 @@ import type { Geometry, Rect } from "./geometry";
 import { caretGeometry, isVertical, selectionRects, toPhysical } from "./geometry";
 import type { Layout, PlacedChar } from "./layout";
 import { cssFont } from "./measure";
+import type { CanvasStyle } from "./style";
 
 /** ネイティブの textarea と同じで、字の大きさには比例しない (CSS px) */
 const CARET_WIDTH = 1;
@@ -25,6 +26,8 @@ export class Renderer {
   constructor(
     private ctx: CanvasRenderingContext2D,
     private options: ResolvedOptions,
+    /** 寸法は生成時に決まる。色は options 側なので動く */
+    private style: CanvasStyle,
   ) {}
 
   setOptions(options: ResolvedOptions): void {
@@ -42,7 +45,7 @@ export class Renderer {
       ctx.fillRect(0, 0, geometry.width, geometry.height);
     }
 
-    ctx.font = cssFont(this.options.font);
+    ctx.font = cssFont(this.style.font);
     ctx.textBaseline = "middle";
 
     this.drawSelection(state);
@@ -94,14 +97,14 @@ export class Renderer {
   /** 縦書き。UAX #50 の分類ごとに置き方を変える */
   private drawUpright(ch: PlacedChar, center: number, top: number): void {
     const { ctx } = this;
-    const size = this.options.font.size;
+    const size = this.style.font.size;
 
     switch (ch.orientation) {
       case "upright": {
         let x = center;
         let y = top + ch.advance / 2;
-        if (this.options.smallKanaShift > 0 && isSmallKana(ch.text)) {
-          const shift = size * this.options.smallKanaShift;
+        if (this.style.smallKanaShift > 0 && isSmallKana(ch.text)) {
+          const shift = size * this.style.smallKanaShift;
           x += shift;
           y -= shift;
         }

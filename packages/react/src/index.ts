@@ -1,3 +1,3 @@
-export type { FontStyle, Selection, TextareaOptions, Theme } from "tatefude-textarea";
-export type { Backend, TextareaHandle, TextareaProps } from "./Textarea";
+export type { Selection, TextareaOptions, Theme, WritingMode } from "tatefude-textarea";
 export { Textarea } from "./Textarea";
+export type { TextareaHandle, TextareaProps } from "./types";

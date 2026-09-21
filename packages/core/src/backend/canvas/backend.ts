@@ -1,6 +1,7 @@
 import type { Caret, Goal } from "../../model/movement";
 import type { ResolvedOptions } from "../../types";
 import type { Backend, CaretRect, ViewState } from "../backend";
+import { fontBoxSize } from "../font-box";
 import { readScroll, writeScroll } from "../scroll";
 import {
   caretGeometry,
@@ -12,9 +13,10 @@ import {
   totalBreadth,
 } from "./geometry";
 import { type Layout, layoutText } from "./layout";
-import { CanvasMeasurer } from "./measure";
+import { CanvasMeasurer, cssFont } from "./measure";
 import { moveAcrossLines, moveToLineEdge } from "./movement";
 import { Renderer } from "./renderer";
+import type { CanvasStyle } from "./style";
 
 /** 字を 1 つずつ canvas に置く。行分割も禁則も字の向きも自前 */
 export class CanvasBackend implements Backend {
@@ -38,6 +40,7 @@ export class CanvasBackend implements Backend {
   private needsLayout = true;
 
   private frame = 0;
+  private followFrame = 0;
   private resizeObserver: ResizeObserver | null = null;
   private destroyed = false;
   private disposers: (() => void)[] = [];
@@ -45,6 +48,8 @@ export class CanvasBackend implements Backend {
   constructor(
     private container: HTMLElement,
     options: ResolvedOptions,
+    /** 生成時に決まる。canvas は公開しないので動かす経路が無い */
+    private style: CanvasStyle,
   ) {
     this.options = options;
     const doc = container.ownerDocument;
@@ -76,15 +81,17 @@ export class CanvasBackend implements Backend {
     const ctx = this.canvas.getContext("2d");
     if (!ctx) throw new Error("tatefude-textarea: 2d コンテキストが取れない");
 
-    this.measurer = new CanvasMeasurer(ctx, options.font);
-    this.renderer = new Renderer(ctx, options);
+    const { font, padding } = this.style;
+    this.measurer = new CanvasMeasurer(ctx, font);
+    this.renderer = new Renderer(ctx, options, this.style);
     this.geometry = {
       writingMode: options.writingMode,
       width: 0,
       height: 0,
-      padding: options.padding,
-      lineHeight: options.font.size * options.font.lineHeight,
-      em: options.font.size,
+      padding,
+      lineHeight: font.size * font.lineHeight,
+      em: font.size,
+      textBox: fontBoxSize(container.ownerDocument, cssFont(font), font.size),
       scroll: 0,
     };
 
@@ -95,17 +102,18 @@ export class CanvasBackend implements Backend {
     this.syncSize();
   }
 
+  get fontSize(): number {
+    return this.style.font.size;
+  }
+
+  /** 寸法は生成時に凍っているので、読み直すものが無い */
+  refresh(): void {}
+
   setOptions(options: ResolvedOptions): void {
     this.options = options;
-    this.measurer.setFont(options.font);
     this.renderer.setOptions(options);
-    this.geometry = {
-      ...this.geometry,
-      writingMode: options.writingMode,
-      padding: options.padding,
-      lineHeight: options.font.size * options.font.lineHeight,
-      em: options.font.size,
-    };
+    // 寸法は生成時に凍っているので、ここで動くのは writingMode と色だけ
+    this.geometry = { ...this.geometry, writingMode: options.writingMode };
     this.needsLayout = true;
     this.applySurfaceStyles();
   }
@@ -179,9 +187,11 @@ export class CanvasBackend implements Backend {
   destroy(): void {
     this.destroyed = true;
     if (this.frame) cancelAnimationFrame(this.frame);
+    if (this.followFrame) cancelAnimationFrame(this.followFrame);
     this.resizeObserver?.disconnect();
     for (const dispose of this.disposers) dispose();
     this.disposers.length = 0;
+    this.measurer.destroy();
     this.canvas.remove();
     this.surface.remove();
   }
@@ -237,6 +247,8 @@ export class CanvasBackend implements Backend {
     const listener = (event: WheelEvent) => {
       if (this.maxScroll() <= 0) return;
       event.preventDefault();
+      // 自分で送った先が見たい位置。突いた場所へは戻さない
+      this.forgetAnchor();
       // 縦組みで「下へ回す = 左へ読み進む」になるかはエンジン任せにできない。
       // タッチのパンは touch-action に任せてあるので、ここは通らない
       this.scrollOffset =
@@ -246,17 +258,99 @@ export class CanvasBackend implements Backend {
     this.disposers.push(() => this.surface.removeEventListener("wheel", listener));
   }
 
+  /** 次の組み直しで戻す先。突いた時点のキャレットの block 座標 */
+  private caretAnchor: { block: number; offset: number } | null = null;
+
+  anchorCaret(): void {
+    const state = this.state;
+    if (!state) {
+      this.caretAnchor = null;
+      return;
+    }
+    this.caretAnchor = { block: this.blockCenterOf(state.caret), offset: state.caret.offset };
+  }
+
+  forgetAnchor(): void {
+    this.caretAnchor = null;
+  }
+
+  /** 行送り方向の中心。縦書きなら列の中心 x、横書きなら行の中心 y */
+  private blockCenterOf(caret: Caret): number {
+    const rect = this.caretRect(caret);
+    return this.vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
+  }
+
+  /**
+   * キャレットの block 座標を anchor に戻す。
+   * 送りの自由度は block 方向しかないので、inline 方向 (縦書きなら y) は組み方任せ
+   */
+  private keepCaretAt(caret: Caret, anchor: number): void {
+    const current = this.blockCenterOf(caret);
+    const scroll = this.scrollOffset;
+    // 符号は ensureVisible と同じ規則。縦書きは送りを増やすと x も増える
+    this.scrollOffset = this.vertical ? scroll + (anchor - current) : scroll - (anchor - current);
+  }
+
+  /**
+   * キャレットを追う。同期パスと rAF が同じ答えを出すように、判断はここだけに置く。
+   * アンカーは使っても捨てない。キーボードは何段階かに分けて器を縮めてくるので、
+   * 1 回使っただけで捨てると 2 段目から戻す先を失う
+   */
+  private follow(): void {
+    const state = this.state;
+    if (this.destroyed || !state) return;
+    const anchor = this.caretAnchor;
+    if (anchor) {
+      // キャレットがあの時のままなら、その場に戻す
+      if (anchor.offset === state.caret.offset) this.keepCaretAt(state.caret, anchor.block);
+      else this.caretAnchor = null;
+    }
+    // 焦点が無いならキャレットを見せる理由もない。キーボードが閉じたあとの
+    // 組み直しはここを通る。戻す先があればそれで足りている
+    if (!state.focused) return;
+    // 戻す先が器の外に出ることがある。キーボードは行送り方向に潰してくるので、
+    // 潰れた側を叩いていると戻す先がそのまま画面の外になる。最後に必ず入れ直す
+    this.ensureVisible(state.caret);
+  }
+
+  /**
+   * 確定した寸法でもう一度追う保険。
+   * 器が変われば列数も変わり、送れる上限 (maxScroll) も変わる。
+   * 同期パスで送りきれていれば同じ値になり、見た目には何も起きない
+   */
+  private scheduleFollow(): void {
+    const view = this.container.ownerDocument.defaultView;
+    if (!view) return;
+    if (this.followFrame) view.cancelAnimationFrame(this.followFrame);
+    this.followFrame = view.requestAnimationFrame(() => {
+      this.followFrame = 0;
+      this.follow();
+    });
+  }
+
   private observeResize(): void {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
-      this.syncSize();
-      this.relayout();
       // 器が変われば行の長さも変わって全部組み直る。
-      // 書いている最中なら、キャレットが画面の外に流れないように追う
-      if (this.state?.focused) this.ensureVisible(this.state.caret);
+      // 送れる上限を先に直しておかないと、このあとの送りが古い上限で丸められる
+      this.syncGeometry();
+      // 書いている最中なら、キャレットが画面の外に流れないように追う。
+      // ここで正解が出るので、rAF は丸められていたときの保険で足りる
+      this.follow();
+      this.scheduleFollow();
       this.schedule();
     });
     this.resizeObserver.observe(this.container);
+  }
+
+  /**
+   * 寸法 → 組み直し → 送れる上限 の順に揃える。
+   * 上限は組み上がりから決まるので、組み直したあとでないと古い値のままになる。
+   * そのあとに送ると、送りがその古い上限で丸められる
+   */
+  private syncGeometry(): void {
+    this.syncSize();
+    this.relayout();
   }
 
   private syncSize(): void {
@@ -280,7 +374,7 @@ export class CanvasBackend implements Backend {
 
   private relayout(): void {
     const maxLineLength = contentLength(this.geometry);
-    const kinsoku = this.options.kinsoku;
+    const kinsoku = this.style.kinsoku;
     this.layout = layoutText({
       text: this.state?.text ?? "",
       maxLineLength,

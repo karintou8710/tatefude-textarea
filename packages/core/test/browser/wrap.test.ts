@@ -2,6 +2,7 @@ import { server, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 import { CanvasTextarea } from "../../src/backend/canvas/index";
 import { DomTextarea } from "../../src/backend/dom/index";
+import { applyStyle, canvasStyle } from "./style";
 
 const SIZE = 20;
 const LINE_HEIGHT = 1.8;
@@ -33,16 +34,16 @@ function native(value: string) {
 }
 
 function ours(Ctor: typeof CanvasTextarea | typeof DomTextarea, value: string) {
+  const style = { size: SIZE, lineHeight: LINE_HEIGHT, padding: PADDING, family: "serif" };
   const host = document.createElement("div");
   Object.assign(host.style, { width: `${LENGTH}px`, height: `${BREADTH}px` });
+  applyStyle(host, style);
   document.body.appendChild(host);
-  const editor = new Ctor(host, {
-    value,
-    writingMode: "horizontal-tb",
-    font: { size: SIZE, lineHeight: LINE_HEIGHT, family: "serif" },
-    padding: PADDING,
-    caretBlinkInterval: 0,
-  });
+  const editor = new Ctor(
+    host,
+    { value, writingMode: "horizontal-tb", caretBlinkInterval: 0 },
+    canvasStyle(style),
+  );
   cleanups.push(() => {
     editor.destroy();
     host.remove();

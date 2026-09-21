@@ -13,6 +13,8 @@ const geometry: Geometry = {
   padding: { top: 10, right: 10, bottom: 10, left: 10 },
   lineHeight: 18,
   em,
+  // 字の箱は em より少し大きい。キャレットの長さがこれに従うことを見る
+  textBox: 12,
   scroll: 0,
 };
 
