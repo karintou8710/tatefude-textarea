@@ -19,7 +19,7 @@ function setup(text: string, linesPerPage = 2) {
   return { state: newEditState(text), run };
 }
 
-describe("字送り", () => {
+describe("インライン方向", () => {
   it("1 つ進む", () => {
     const { state, run } = setup("あいうえお");
     const result = run(state, { type: "stepInline", direction: 1, word: false, extend: false });
@@ -51,8 +51,8 @@ describe("字送り", () => {
   });
 });
 
-describe("行送り", () => {
-  it("行を移ると、元いた送り方向の位置を保つ", () => {
+describe("ブロック方向", () => {
+  it("行を移ると、元いたスクロール位置を保つ", () => {
     const { state, run } = setup("あ".repeat(24));
     const at = { ...state, head: { offset: 2, preferEnd: false } };
     const result = run(at, { type: "moveAcross", direction: 1, extend: false });

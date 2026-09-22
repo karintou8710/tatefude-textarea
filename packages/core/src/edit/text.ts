@@ -64,13 +64,21 @@ export function cut(state: EditState, limits: Limits): CutResult {
 export function undo(state: EditState): Result {
   const back = history.undo(state.history, snapshot(state));
   if (!back) return unchanged(state);
-  return { state: restore(state, back.snapshot, back.history), changed: "edit" };
+  return {
+    state: restore(state, back.snapshot, back.history),
+    changed: "edit",
+    scrollIntoView: false,
+  };
 }
 
 export function redo(state: EditState): Result {
   const forward = history.redo(state.history, snapshot(state));
   if (!forward) return unchanged(state);
-  return { state: restore(state, forward.snapshot, forward.history), changed: "edit" };
+  return {
+    state: restore(state, forward.snapshot, forward.history),
+    changed: "edit",
+    scrollIntoView: false,
+  };
 }
 
 /** 中身を丸ごと入れ替える。履歴を残すかは呼び手が決める */
@@ -91,6 +99,7 @@ export function reset(
       composition: null,
     },
     changed: "edit",
+    scrollIntoView: false,
   };
 }
 
@@ -121,6 +130,7 @@ function replace(
       history: history.push(state.history, snapshot(state), kind),
     },
     changed: "edit",
+    scrollIntoView: true,
   };
 }
 

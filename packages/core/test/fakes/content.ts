@@ -3,11 +3,11 @@ import type { Content } from "../../src/backend/dom/geometry";
 import { sentinelFor } from "../../src/backend/dom/geometry";
 
 const LINE_HEIGHT = 30;
-/** 全角 1 字ぶんの送り */
+/** 全角 1 字ぶんの送り量 */
 const EM = 20;
 /** layer の左上 (クライアント座標)。surface と重ねる */
 const ORIGIN = { x: 10, y: 20 };
-/** 行送り方向の広さ。行数は足りていればいい */
+/** ブロック方向の広さ。行数は足りていればいい */
 const BREADTH = 300;
 
 /**
@@ -52,11 +52,11 @@ interface Place {
   line: number;
   /** 行の中で何字目から始まるか */
   index: number;
-  /** 送り方向に占める長さ。改行と末尾の番人は 0 */
+  /** スクロール方向に占める長さ。改行と末尾の番人は 0 */
   size: number;
 }
 
-/** 折り返しと改行で (行, 送り位置) を割り当てる */
+/** 折り返しと改行で (行, インライン位置) を割り当てる */
 function place(rendered: string, perLine: number): Place[] {
   const places: Place[] = [];
   let line = 0;

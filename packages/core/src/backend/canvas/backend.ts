@@ -149,11 +149,11 @@ export class CanvasBackend implements Backend {
       clientX - rect.left,
       clientY - rect.top,
     );
-    // 折り返しの境目を突いたときは、押した行の側に着ける
+    // 折り返しの境目をクリックしたときは、押した行の側に着ける
     return { offset, preferEnd: line === lineIndexOfOffset(this.layout, offset, true) };
   }
 
-  /** 指で掴むつまみは dom 経路だけで持つ。canvas は出さない */
+  /** 指で掴むハンドルは dom 経路だけで持つ。canvas は出さない */
   hitHandle(): Handle | null {
     return null;
   }
@@ -188,9 +188,9 @@ export class CanvasBackend implements Backend {
     return moveToLineEdge(this.layout, caret, edge);
   }
 
-  // ---- 送り。中身は CanvasScroller ----
+  // ---- スクロール。中身は CanvasScroller ----
 
-  /** 送りがレイアウトから引くもの。レイアウトのたびに変わるので、値ではなく読み方を渡す */
+  /** スクロールがレイアウトから引くもの。レイアウトのたびに変わるので、値ではなく読み方を渡す */
   private scrollHost(): ScrollHost {
     return {
       surface: this.surface,
@@ -216,12 +216,13 @@ export class CanvasBackend implements Backend {
     this.scroller.scrollOffset = value;
   }
 
-  show(state: ViewState): void {
-    // 本文や選択が動いた。キャレットは出た状態から数え直す
-    this.blink.sync(state.focused, this.options.caretBlinkInterval);
+  show(state: ViewState, scrollIntoView: boolean): void {
+    // 本文や選択が動いた。キャレットは出た状態から数え直す。
+    // 出さないとき (選択が伸びている間) は数えない——描き直しても何も変わらない
+    this.blink.sync(state.focused && state.caretVisible, this.options.caretBlinkInterval);
     this.update(state);
-    this.scroller.ensureVisible(state.caret);
-    // 送りが落ち着いたいま、キャレットが画面のどこに居るかを控える。
+    if (scrollIntoView) this.scroller.ensureVisible(state.caret);
+    // スクロールが落ち着いたいま、キャレットが画面のどこに居るかを控える。
     // 次のレイアウトで、そこへ戻す
     this.scroller.anchorCaret();
   }
@@ -251,8 +252,8 @@ export class CanvasBackend implements Backend {
   }
 
   /**
-   * surface 自身を writingMode に置くと、送り方向のはみ出しがスクロール領域になる。
-   * touch-action を送り方向だけ開けて、パンはブラウザ、タップと長押しは pointer 側で拾う
+   * surface 自身を writingMode に置くと、スクロール方向のはみ出しがスクロール領域になる。
+   * touch-action をスクロール方向だけ開けて、パンはブラウザ、タップと長押しは pointer 側で拾う
    */
   private applySurfaceStyles(): void {
     const vertical = this.vertical;
@@ -289,7 +290,7 @@ export class CanvasBackend implements Backend {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
       // コンテナが変われば行の長さも変わって全部レイアウトし直される。
-      // 送れる上限を先に直しておかないと、このあとの送りが古い上限で丸められる
+      // スクロールできる上限を先に直しておかないと、このあとのスクロールが古い上限で丸められる
       this.syncGeometry();
       // 書いている最中なら、キャレットが画面の外に流れないように追う。
       // ここで正解が出るので、rAF は丸められていたときの保険で足りる
@@ -301,9 +302,9 @@ export class CanvasBackend implements Backend {
   }
 
   /**
-   * 寸法 → レイアウト → 送れる上限 の順に揃える。
+   * 寸法 → レイアウト → スクロールできる上限 の順に揃える。
    * 上限はレイアウトの結果から決まるので、レイアウトし直したあとでないと古い値のままになる。
-   * そのあとに送ると、送りがその古い上限で丸められる
+   * そのあとにスクロールすると、古い上限で丸められる
    */
   private syncGeometry(): void {
     this.syncSize();

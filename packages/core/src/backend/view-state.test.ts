@@ -40,7 +40,7 @@ describe("変換中", () => {
     empty: true,
   });
 
-  it("選択とつまみは出さない", () => {
+  it("選択とハンドルは出さない", () => {
     const state = buildViewState(composing, screen({ handles: true }), "");
     expect(state.selection).toEqual({ start: 0, end: 0 });
     expect(state.handles).toBe(false);

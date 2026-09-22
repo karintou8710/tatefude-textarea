@@ -20,7 +20,7 @@ const PITCH_SAMPLE = 400;
  * 「どこに何が落ちたか」を Range API で読み返すだけ。
  *
  * **判断は持たない。**どこにキャレットが立つかは `geometry.ts`、
- * 縦横の入れ替えは `axis.ts`、送りは `scroller.ts`、
+ * 縦横の入れ替えは `axis.ts`、スクロールは `scroller.ts`、
  * 要素と CSS は `styles.ts`、重ねる層は `renderer.ts`。
  * ここがやるのは組み立てと、測った答えを配ること。
  */
@@ -133,7 +133,7 @@ export class DomBackend implements Backend {
     return geometry.caretAtPoint(this.axis(), this.readContent(), offset, clientX, clientY);
   }
 
-  /** canvas 版と揃えて、surface を原点にした矩形を返す。送り方向の厚みは持たない */
+  /** canvas 版と揃えて、surface を原点にした矩形を返す。スクロール方向の厚みは持たない */
   hitHandle(clientX: number, clientY: number): Handle | null {
     const state = this.state;
     if (!state) return null;
@@ -169,9 +169,9 @@ export class DomBackend implements Backend {
     return geometry.lineEdge(this.axis(), this.readContent(), caret, edge);
   }
 
-  // ---- 送り。中身は DomScroller ----
+  // ---- スクロール。中身は DomScroller ----
 
-  /** 送りがレイアウトから引くもの。レイアウトのたびに変わるので、値ではなく読み方を渡す */
+  /** スクロールがレイアウトから引くもの。レイアウトのたびに変わるので、値ではなく読み方を渡す */
   private scrollHost(): ScrollHost {
     return {
       surface: this.surface,
@@ -199,12 +199,13 @@ export class DomBackend implements Backend {
     this.scroller.scrollOffset = value;
   }
 
-  show(state: ViewState): void {
-    // 本文や選択が動いた。キャレットは出た状態から数え直す
-    this.blink.sync(state.focused, this.options.caretBlinkInterval);
+  show(state: ViewState, scrollIntoView: boolean): void {
+    // 本文や選択が動いた。キャレットは出た状態から数え直す。
+    // 出さないとき (選択が伸びている間) は数えない——描き直しても何も変わらない
+    this.blink.sync(state.focused && state.caretVisible, this.options.caretBlinkInterval);
     this.update(state);
-    this.scroller.ensureVisible(state.caret);
-    // 送りが落ち着いたいま、キャレットが画面のどこに居るかを控える。
+    if (scrollIntoView) this.scroller.ensureVisible(state.caret);
+    // スクロールが落ち着いたいま、キャレットが画面のどこに居るかを控える。
     // 次のレイアウトで、そこへ戻す
     this.scroller.anchorCaret();
   }
@@ -279,7 +280,7 @@ export class DomBackend implements Backend {
   /**
    * 寸法 → レイアウト → 送れる上限 の順に揃える。
    * 上限はレイアウトの結果から決まるので、測って確定させたあとでないと古い値のままになる。
-   * そのあとに送ると、送りがその古い上限で丸められる
+   * そのあとにスクロールすると、古い上限で丸められる
    */
   private syncGeometry(): void {
     styles.syncMetrics(this.els, this.metrics, this.vertical);
@@ -330,6 +331,10 @@ export class DomBackend implements Backend {
       const span = doc.createElement("span");
       Object.assign(span.style, {
         textDecoration: "underline",
+        // **縦書きでは字の左**。ネイティブの textarea が変換中の線をそこへ引く。
+        // 既定 (auto) だと日本語のときだけ右へ回るうえ、判定がフォントのスクリプト
+        // 由来なのでホストページの lang に振られる。canvas 経路も左に合わせてある
+        textUnderlinePosition: "left",
         textDecorationThickness: active ? "2px" : "1px",
         textDecorationColor: active
           ? this.options.theme.compositionActive
@@ -399,7 +404,7 @@ export class DomBackend implements Backend {
     }
 
     const limit = geometry.textLength(this.readContent());
-    // 突いた場所が本文に当たらないことがある (余白・重なり・エンジン差)。
+    // クリックした場所が本文に当たらないことがある (余白・重なり・エンジン差)。
     // 文末へ飛ばすとキャレットが画面外へ出て、iOS ではキーボードが開いて即閉じる。
     // 当たらなければ動かさない
     const fallback = this.state?.caret.offset ?? 0;
@@ -416,7 +421,7 @@ export class DomBackend implements Backend {
     if (typeof ResizeObserver === "undefined") return;
     this.resizeObserver = new ResizeObserver(() => {
       // コンテナが変われば行の長さも変わって全部レイアウトし直される。
-      // 送れる上限を先に直しておかないと、このあとの送りが古い上限で丸められる
+      // スクロールできる上限を先に直しておかないと、このあとのスクロールが古い上限で丸められる
       this.syncGeometry();
       // 書いている最中なら、キャレットが画面の外に流れないように追う。
       // ここで正解が出るので、rAF は丸められていたときの保険で足りる

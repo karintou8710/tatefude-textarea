@@ -4,7 +4,7 @@ import { HANDLE_RADIUS, type HandlePoint } from "../handle";
 import type { Axis, Rect } from "./axis";
 
 /**
- * 選択・キャレット・つまみを、本文の上に重ねた層へ置く。
+ * 選択・キャレット・ハンドルを、本文の上に重ねた層へ置く。
  *
  * **測らない。**どこに何を置くかは geometry が決めたものを受け取るだけで、
  * ここがやるのは矩形を div にして色を塗ることだけ。
@@ -22,7 +22,7 @@ export interface Overlay {
   selection: readonly Rect[];
   /** キャレットの矩形 (surface 基準)。null なら描かない */
   caret: CaretRect | null;
-  /** つまみの中心 (surface 基準) */
+  /** ハンドルの中心 (surface 基準) */
   handles: readonly [edge: Handle, center: HandlePoint][];
 }
 
@@ -82,7 +82,7 @@ export class Renderer {
     this.caretLayer.appendChild(bar);
   }
 
-  /** 選択の端に丸いつまみを描く。キャレットの棒の先に置く */
+  /** 選択の端に丸いハンドルを描く。キャレットの棒の先に置く */
   private paintHandles({ axis, handles }: Overlay): void {
     const { layer, surface } = axis;
     for (const [edge, center] of handles) {

@@ -40,12 +40,12 @@ describe("マウス", () => {
     expect(state.drag).toEqual({ extend: true });
   });
 
-  it("触り直したら指のつまみは引っ込める", () => {
+  it("触り直したら指のハンドルは引っ込める", () => {
     const { effects } = play([touch({ touch: false })]);
     expect(effects[1]).toEqual({ type: "showHandles", show: false });
   });
 
-  it("2 回で語、3 回で段落。どちらも引きずらない", () => {
+  it("2 回で語、3 回で段落。どちらもドラッグに繋がらない", () => {
     expect(play([touch({ touch: false, clicks: 2 })]).types).toContain("selectWord");
     expect(play([touch({ touch: false, clicks: 3 })]).types).toContain("selectParagraph");
     expect(play([touch({ touch: false, clicks: 2 })]).state.drag).toBe(null);
@@ -57,14 +57,14 @@ describe("マウス", () => {
   });
 });
 
-describe("指: 叩く", () => {
-  it("押した時点では focus を入れない。なぞっただけでキーボードが出てしまう", () => {
+describe("指: タップ", () => {
+  it("押した時点では focus を入れない。スワイプしただけでキーボードが出てしまう", () => {
     const { types } = play([touch()]);
     expect(types).toEqual(["forgetAnchor", "cancelLongPress", "waitLongPress"]);
     expect(types).not.toContain("focus");
   });
 
-  it("動かずに離したら、置いて・つまみを出して・focus", () => {
+  it("動かずに離したら、置いて・ハンドルを出して・focus", () => {
     const { types } = play([touch(), { type: "up", id: 1, x: 100, y: 100, shift: false }]);
     expect(types).toEqual([
       "forgetAnchor",
@@ -77,7 +77,7 @@ describe("指: 叩く", () => {
     ]);
   });
 
-  it("少しなら動いても叩いた扱い (8px まで)", () => {
+  it("少しなら動いてもタップした扱い (8px まで)", () => {
     const { types } = play([touch(), { type: "up", id: 1, x: 108, y: 100, shift: false }]);
     expect(types).toContain("placeCaret");
   });
@@ -99,11 +99,11 @@ describe("指: 叩く", () => {
   });
 });
 
-describe("指: 続けて叩く", () => {
+describe("指: 連続タップ", () => {
   const second = (over: Partial<Extract<PointerInput, { type: "down" }>> = {}) =>
     touch({ at: 1200, ...over });
 
-  it("2 回目で語を選び、そのまま引きずれる", () => {
+  it("2 回目で語を選び、そのままドラッグできる", () => {
     const { state, types } = play([
       touch(),
       { type: "up", id: 1, x: 100, y: 100, shift: false },
@@ -144,7 +144,7 @@ describe("指: 続けて叩く", () => {
     expect(state.taps).toBe(1);
   });
 
-  it("なぞったら続けて叩いた数も切れる", () => {
+  it("スワイプしたら続けてタップした数も切れる", () => {
     const { state } = play([
       touch(),
       { type: "move", id: 1, x: 200, y: 100 },
@@ -182,8 +182,8 @@ describe("指: 長押し", () => {
   });
 });
 
-describe("指: つまみ", () => {
-  it("押した時点で掴む。叩いた扱いにはしない", () => {
+describe("指: ハンドル", () => {
+  it("押した時点で掴む。タップした扱いにはしない", () => {
     const { state, types } = play([touch({ handle: "start" })]);
     expect(types).toEqual(["forgetAnchor", "cancelLongPress", "grabHandle", "capture"]);
     expect(state.drag).toEqual({ extend: true });
@@ -197,7 +197,7 @@ describe("指: つまみ", () => {
 });
 
 describe("やめる", () => {
-  it("ブラウザがパンを取ったら、掴みも叩きも捨てる", () => {
+  it("ブラウザがパンを取ったら、掴みもタップも捨てる", () => {
     const { state, types } = play([touch({ handle: "start" }), { type: "cancel", id: 1 }]);
     expect(state.drag).toBe(null);
     expect(state.tap).toBe(null);

@@ -1,6 +1,6 @@
 import type { Command } from "../edit/command";
 import type { CaretRect } from "../layout";
-import { commandFor, strokeOf } from "./keymap";
+import { commandFor, type Platform, strokeOf } from "./keymap";
 import type { Input, InputOptions } from "./receivers";
 
 export interface HiddenInputHandlers {
@@ -10,7 +10,7 @@ export interface HiddenInputHandlers {
   compositionEnd(text: string): void;
   /**
    * キーが押された。割り当てが無ければ null。
-   * 何のキーでも来るのは、打ったらつまみを引っ込めるため
+   * 何のキーでも来るのは、打ったらハンドルを引っ込めるため
    */
   keyDown(command: Command | null): void;
   /** キャレットの居場所と、全角 1 文字ぶん。候補ウィンドウを脇に出すのに要る */
@@ -31,6 +31,8 @@ export class HiddenInput implements Input {
   private container: HTMLElement;
   private composing = false;
   private disposers: (() => void)[] = [];
+  /** キー割り当ては OS ごとに違う。生成時に 1 回だけ見る */
+  private platform: Platform;
 
   constructor(
     container: HTMLElement,
@@ -38,6 +40,7 @@ export class HiddenInput implements Input {
     private options: InputOptions,
   ) {
     this.container = container;
+    this.platform = platformOf(container.ownerDocument.defaultView);
     const element = container.ownerDocument.createElement("textarea");
     element.setAttribute("autocapitalize", "off");
     element.setAttribute("autocorrect", "off");
@@ -150,7 +153,7 @@ export class HiddenInput implements Input {
     on("keydown", (event) => {
       if (this.composing || event.isComposing || event.keyCode === 229) return;
       // キーの割り当てはここで済ませる。外へ出すのは「何をするか」だけ
-      const command = commandFor(strokeOf(event), this.options.writingMode);
+      const command = commandFor(strokeOf(event), this.options.writingMode, this.platform);
       if (command) event.preventDefault();
       this.handlers.keyDown(command);
     });
@@ -232,6 +235,15 @@ export class HiddenInput implements Input {
     this.disposers.length = 0;
     this.element.remove();
   }
+}
+
+/** macOS だけキー割り当てが別。iOS もハードウェアキーボードを繋げば同じ */
+function platformOf(view: Window | null): Platform {
+  const nav = view?.navigator;
+  if (!nav) return "other";
+  const data = (nav as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+  const source = data?.platform || nav.platform || nav.userAgent;
+  return /mac|iphone|ipad|ipod/i.test(source) ? "mac" : "other";
 }
 
 function clamp(value: number, min: number, max: number): number {

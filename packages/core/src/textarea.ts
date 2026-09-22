@@ -38,7 +38,7 @@ import {
 } from "./types";
 
 /**
- * 外から叩ける操作を、副作用を外した形で並べたもの。
+ * 外から呼べる操作を、副作用を外した形で並べたもの。
  * 引数は `commands` と同じで、返すのは新しい state だけ
  */
 type Operations = {
@@ -83,7 +83,7 @@ export class Textarea {
   readonly can: TextareaCan;
 
   /**
-   * 外から叩ける操作を 1 回だけ並べる。**判断はここだけ。**
+   * 外から呼べる操作を 1 回だけ並べる。**判断はここだけ。**
    * `commands` (やる) と `can` (動くか) は、どちらもここから導く
    */
   private ops = {
@@ -123,7 +123,7 @@ export class Textarea {
     this.can = this.makeCan();
 
     this.input = new HiddenInput(container, this.inputHandlers(), this.options);
-    // 突いた場所が何文字目かと、戻す先を忘れるのに backend を聞く
+    // クリックした場所が何文字目かと、戻す先を忘れるのに backend を聞く
     this.pointer = new PointerGestures(backend.surface, backend, backend, this.pointerActions());
 
     this.sync();
@@ -158,13 +158,13 @@ export class Textarea {
     this.sync();
   }
 
-  /** 行送り方向にどれだけ送られているか (px) */
+  /** ブロック方向へどれだけスクロールしたか (px) */
   get scrollOffset(): number {
     return this.backend.scrollOffset;
   }
 
   set scrollOffset(value: number) {
-    // 外から送った先が見たい位置。突いた場所へは戻さない (ホイールと同じ扱い)。
+    // 外からスクロールした先が見たい位置。クリックした場所へは戻さない (ホイールと同じ扱い)。
     // 解かないと、次にコンテナが変わったとき follow が元の位置へ巻き戻す
     this.backend.forgetAnchor();
     this.backend.scrollOffset = value;
@@ -205,8 +205,8 @@ export class Textarea {
   }
 
   /**
-   * 外から叩く編集の操作。`ops` の結果を `apply` に渡すだけ。
-   * ここに残るのは副作用の段取り——通知するか、つまみを引っ込めるか、何を返すか
+   * 外から呼ぶ編集の操作。`ops` の結果を `apply` に渡すだけ。
+   * ここに残るのは副作用の段取り——通知するか、ハンドルを引っ込めるか、何を返すか
    */
   private makeCommands(): TextareaCommands {
     const ops = this.ops;
@@ -275,7 +275,7 @@ export class Textarea {
     };
   }
 
-  /** 指とマウスから来る出来事の行き先。つまみの出し入れだけが画面の状態 */
+  /** 指とマウスから来る出来事の行き先。ハンドルの出し入れだけが画面の状態 */
   private pointerActions(): PointerActions {
     return {
       disabled: () => this.options.disabled,
@@ -306,7 +306,8 @@ export class Textarea {
   private apply(result: Result, announce = true): void {
     if (!result.changed) return;
     this.editState = result.state;
-    this.sync();
+    // 画面に入れるかは操作が決めている。こちらは運ぶだけ
+    this.sync(result.scrollIntoView);
     if (result.changed === "edit" && announce) this.callbacks.onChange?.(this.editState.text);
     if (result.changed !== "view") this.callbacks.onSelectionChange?.(selection(this.editState));
   }
@@ -325,7 +326,7 @@ export class Textarea {
     this.apply(this.ops.insertText(text));
   }
 
-  /** 割り当ての無いキーも来る。打ったらつまみを引っ込めるため */
+  /** 割り当ての無いキーも来る。打ったらハンドルを引っ込めるため */
   private handleKeyDown(command: Command | null): void {
     this.hideHandles();
     if (!command || this.options.disabled) return;
@@ -347,7 +348,7 @@ export class Textarea {
     this.callbacks.onBlur?.();
   }
 
-  /** 打ったらつまみを引っ込める。描き直しは続く apply に任せる */
+  /** 打ったらハンドルを引っ込める。描き直しは続く apply に任せる */
   private hideHandles(): void {
     this.screen = showHandles(this.screen, false);
   }
@@ -358,14 +359,14 @@ export class Textarea {
     return buildViewState(viewContent(this.editState), this.screen, this.options.placeholder);
   }
 
-  /** 本文や選択が動いた。描き直して、キャレットを見える位置に置いてもらう */
-  private sync(): void {
+  /** 本文や選択が動いた。描き直して、頼まれていればキャレットを見える位置に置いてもらう */
+  private sync(scrollIntoView = false): void {
     if (this.destroyed) return;
-    this.backend.show(this.viewState());
+    this.backend.show(this.viewState(), scrollIntoView);
     this.input.followCaret();
   }
 
-  /** 点滅だけの描き直し。送りは動かさない */
+  /** 点滅だけの描き直し。スクロールは動かさない */
   private redraw(): void {
     if (this.destroyed) return;
     this.backend.update(this.viewState());

@@ -86,7 +86,7 @@ describe("禁則処理", () => {
 });
 
 describe("文字の位置", () => {
-  it("行の中の送り位置が積み上がる", () => {
+  it("行の中のインライン位置が積み上がる", () => {
     const line = layout("あいう", 10).lines[0];
     expect(line.chars.map((ch) => ch.offset)).toEqual([0, em, em * 2]);
     expect(line.length).toBe(em * 3);

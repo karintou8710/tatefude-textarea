@@ -5,6 +5,7 @@ import { resolveCanvasStyle } from "../src/backend/canvas/style";
 import { DomBackend } from "../src/backend/dom/backend";
 import { Textarea } from "../src/textarea";
 import { resolveOptions, type TextareaOptions } from "../src/types";
+import { byUnit, toDocEdge } from "./keys";
 import { applyStyle, canvasStyle } from "./style";
 
 /**
@@ -12,7 +13,7 @@ import { applyStyle, canvasStyle } from "./style";
  * 片方が正しくてももう片方がずれていたら、どちらかがバグっている。
  *
  * 本文は全角だけにする。ラテンは canvas が 1 字ずつ測り、dom は
- * ブラウザがまとめて整形するので、送りが一致しなくて当たり前。
+ * ブラウザがまとめて整形するので、字の送り量が一致しなくて当たり前。
  */
 
 const SIZE = 20;
@@ -103,6 +104,9 @@ function expectSame(canvasSteps: Step[], domSteps: Step[]) {
   expect(diffs).toEqual([]);
 }
 
+/** 縦書きなので、ブロック方向は ← が次の行・→ が前の行 */
+const LINES = { nextLine: "ArrowLeft", prevLine: "ArrowRight" };
+
 function drive(target: Mounted, keys: readonly (readonly [string, KeyboardEventInit?])[]): Step[] {
   return keys.map(([name, init]) => {
     key(target.textarea, name, init ?? {});
@@ -144,7 +148,7 @@ const mixed = "あい\nうえお\n\nかき";
 
 describe("2 つのバックエンドが同じところに着く", () => {
   it.each([
-    // 縦書きなので、字送りが ↑↓ で行送りが ←→
+    // 縦書きなので、インライン方向が ↑↓ でブロック方向が ←→
     ["行を次へ連打", wrap, 0, repeat(25, "ArrowLeft")],
     ["行を前へ連打", wrap, 20, repeat(25, "ArrowRight")],
     ["文字を戻る連打", wrap, 3, repeat(6, "ArrowUp")],
@@ -155,7 +159,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
     ["Shift で行を伸ばす", wrap, 5, repeat(15, "ArrowLeft", { shiftKey: true })],
     ["改行混じりで行を次へ", mixed, 0, repeat(14, "ArrowLeft")],
     ["改行混じりで行を前へ", mixed, 12, repeat(14, "ArrowRight")],
-    ["段落の端へ", mixed, 5, repeat(6, "ArrowLeft", { altKey: true })],
+    ["段落の端へ", mixed, 5, repeat(6, "ArrowLeft", byUnit)],
   ])("%s", (_label, value, start, keys) => {
     const { canvas, dom } = pair(value);
     canvas.editor.commands.setSelection(start);
@@ -166,15 +170,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
 
   it.each([
     ["行頭行末", wrap, 12, [["End"], ["Home"], ["ArrowLeft"], ["End"], ["Home"], ["ArrowRight"]]],
-    [
-      "文頭文末",
-      wrap,
-      8,
-      [
-        ["ArrowLeft", { metaKey: true }],
-        ["ArrowRight", { metaKey: true }],
-      ],
-    ],
+    ["文頭文末", wrap, 8, [toDocEdge("end", LINES), toDocEdge("start", LINES)]],
   ] as const)("%s", (_label, value, start, keys) => {
     const { canvas, dom } = pair(value);
     canvas.editor.commands.setSelection(start);
@@ -201,20 +197,20 @@ describe("2 つのバックエンドが同じところに着く", () => {
     expectSame(drive(canvas, keys), drive(dom, keys));
   });
 
-  it("折り返しの境目はどちらから突いたかで着く行が変わる", () => {
+  it("折り返しの境目はどちらからクリックしたかで着く行が変わる", () => {
     const { canvas, dom } = pair(wrap);
     const lineHeight = SIZE * LINE_HEIGHT;
     const column = (host: HTMLElement, index: number) =>
       host.getBoundingClientRect().right - PADDING - lineHeight * (index + 0.5);
     const top = (host: HTMLElement) => host.getBoundingClientRect().top + PADDING;
 
-    // 1 行目の末尾側を突く
+    // 1 行目の末尾側をクリックする
     click(canvas.host, column(canvas.host, 0), top(canvas.host) + 199);
     click(dom.host, column(dom.host, 0), top(dom.host) + 199);
     const atLineEnd = state(canvas, "1行目の末尾");
     expectSame([atLineEnd], [state(dom, "1行目の末尾")]);
 
-    // 2 行目の頭側を突く。offset は同じでも着く行が違う
+    // 2 行目の頭側をクリックする。offset は同じでも着く行が違う
     click(canvas.host, column(canvas.host, 1), top(canvas.host) + 1);
     click(dom.host, column(dom.host, 1), top(dom.host) + 1);
     const atLineStart = state(canvas, "2行目の頭");
@@ -225,7 +221,25 @@ describe("2 つのバックエンドが同じところに着く", () => {
     expect(atLineStart.y).toBeLessThan(atLineEnd.y);
   });
 
-  it("送ってからでも同じところを突ける", () => {
+  it("改行の直後は、どちらの側から来ても次の行の頭", () => {
+    // 折り返しの境目は preferEnd でどちらの行に着けるか選べるが、改行の直後は選べない。
+    // 変換を始めた直後 (caretOver が preferEnd: true を返す) に、前の行へ落ちないこと
+    const { canvas, dom } = pair("あい\nうえお");
+    for (const target of [canvas, dom]) {
+      const head = target.backend.caretRect({ offset: 3, preferEnd: false });
+      const asEnd = target.backend.caretRect({ offset: 3, preferEnd: true });
+      const prevLine = target.backend.caretRect({ offset: 2, preferEnd: true });
+      expect(Math.round(asEnd.x)).toBe(Math.round(head.x));
+      expect(Math.round(asEnd.y)).toBe(Math.round(head.y));
+      // 1 行目の末尾とは別の列に居る
+      expect(Math.round(head.x)).not.toBe(Math.round(prevLine.x));
+    }
+    const c = canvas.backend.caretRect({ offset: 3, preferEnd: true });
+    const d = dom.backend.caretRect({ offset: 3, preferEnd: true });
+    expect([Math.round(c.x), Math.round(c.y)]).toEqual([Math.round(d.x), Math.round(d.y)]);
+  });
+
+  it("スクロールしてからでも同じところをクリックできる", () => {
     const { canvas, dom } = pair(long);
     const lineHeight = SIZE * LINE_HEIGHT;
     canvas.editor.scrollOffset = lineHeight * 3;
@@ -236,7 +250,10 @@ describe("2 つのバックエンドが同じところに着く", () => {
       const box = host.getBoundingClientRect();
       click(host, box.right - PADDING - lineHeight * 0.5, box.top + PADDING + 30);
     }
-    expectSame([state(canvas, "送ってから突く")], [state(dom, "送ってから突く")]);
+    expectSame(
+      [state(canvas, "スクロールしてからクリックする")],
+      [state(dom, "スクロールしてからクリックする")],
+    );
   });
 
   /**
@@ -248,7 +265,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
   it.each(["system-ui", "serif", "sans-serif", "monospace"])(
     "縦の送りが 1em でない %s でも揃う",
     (family) => {
-      // 行の長さを少しずつ変える。送りを 1em と決め打っていると、
+      // 行の長さを少しずつ変える。送り量を 1em と決め打っていると、
       // どこかで 1 行に入る字数がずれる
       const counts = [190, 200, 210, 220, 230, 240].map((height) => {
         const { canvas, dom } = pair(long, family, height);
@@ -295,7 +312,7 @@ describe("2 つのバックエンドが同じところに着く", () => {
     });
   });
 
-  it("caretPositionFromPoint が無くても突ける (Safari 18.2 未満)", () => {
+  it("caretPositionFromPoint が無くてもクリックできる (Safari 18.2 未満)", () => {
     const original = Object.getOwnPropertyDescriptor(document, "caretPositionFromPoint");
     // 古い WebKit には caretRangeFromPoint しかない
     Object.defineProperty(document, "caretPositionFromPoint", {

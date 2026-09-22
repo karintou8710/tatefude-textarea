@@ -73,7 +73,7 @@ export function inlineEndOf(axis: Axis, rect: Rect): number {
   return axis.vertical ? bottom(rect) - axis.layer.y : right(rect) - axis.layer.x;
 }
 
-/** 字が送り方向に占める長さ */
+/** 字がスクロール方向に占める長さ */
 export function inlineSizeOf(axis: Axis, rect: Rect): number {
   return axis.vertical ? rect.height : rect.width;
 }

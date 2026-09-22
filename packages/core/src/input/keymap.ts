@@ -4,11 +4,14 @@ import type { WritingMode } from "../types";
 /** 字の並ぶ向き (inline) か、行の重なる向き (block) か */
 export type Axis = "inline" | "block";
 
+/** キー割り当てが分かれる単位。macOS だけが別 */
+export type Platform = "mac" | "other";
+
 /** KeyboardEvent から、割り当てに要るものだけ取り出した形 */
 export interface KeyStroke {
   key: string;
-  /** macOS の ⌘ と、それ以外の Ctrl */
-  accel: boolean;
+  ctrl: boolean;
+  meta: boolean;
   shift: boolean;
   alt: boolean;
 }
@@ -16,7 +19,8 @@ export interface KeyStroke {
 export function strokeOf(event: KeyboardEvent): KeyStroke {
   return {
     key: event.key,
-    accel: event.metaKey || event.ctrlKey,
+    ctrl: event.ctrlKey,
+    meta: event.metaKey,
     shift: event.shiftKey,
     alt: event.altKey,
   };
@@ -25,47 +29,67 @@ export function strokeOf(event: KeyboardEvent): KeyStroke {
 /**
  * 押されたキーを、やることへ移す。null なら受け持たない (既定の動作に任せる)。
  *
- * 矢印以外は Blink の textarea を基準にしている。迷ったら
- * test/browser/native.test.ts に本物を並べて測る。
+ * **修飾キーはその OS のネイティブに揃える。**同じ「単語ぶん動く」でも、
+ * macOS は ⌥ から、それ以外は Ctrl から来る。キーは OS ごとに入り口が違うので、
+ * ここは揃えずに分ける (矢印の向きは逆で、画面の向きで揃える)。
+ *
+ * 迷ったら test/native.browser.test.ts に本物を並べて測る。
  */
-export function commandFor(stroke: KeyStroke, writingMode: WritingMode): Command | null {
-  const { key, accel, shift, alt } = stroke;
+export function commandFor(
+  stroke: KeyStroke,
+  writingMode: WritingMode,
+  platform: Platform,
+): Command | null {
+  const { key, shift } = stroke;
+  const mac = platform === "mac";
+  /** 取り消し・全選択。macOS の ⌘ と、それ以外の Ctrl。どちらでも受ける */
+  const mod = stroke.meta || stroke.ctrl;
+  /** 語・段落ぶん動く。macOS は ⌥、それ以外は Ctrl */
+  const byUnit = mac ? stroke.alt : stroke.ctrl;
+  /** 端まで飛ぶ。macOS だけが矢印で飛び、それ以外は Home / End が担う */
+  const toEdge = mac && stroke.meta;
 
   const arrow = arrowOf(key, writingMode);
   if (arrow) {
+    // その OS では矢印に割り当ての無い修飾。ブラウザか OS の側が持っている
+    // (Windows の Alt + ← は戻る、macOS の Ctrl + ← は操作スペースの切り替え)
+    if (mac ? stroke.ctrl : stroke.alt || stroke.meta) return null;
     const { axis, direction } = arrow;
     if (axis === "inline") {
-      // 字送りの向きに accel を足すと、行の端まで
-      if (accel) return { type: "lineEdge", edge: edgeOf(direction), extend: shift };
-      return { type: "stepInline", direction, word: alt, extend: shift };
+      if (toEdge) return { type: "lineEdge", edge: edgeOf(direction), extend: shift };
+      return { type: "stepInline", direction, word: byUnit, extend: shift };
     }
-    // 行送りの向きに accel を足すと、本文の端まで
-    if (accel) return { type: "docEdge", edge: edgeOf(direction), extend: shift };
-    if (alt) return { type: "paragraphEdge", direction, extend: shift };
+    if (toEdge) return { type: "docEdge", edge: edgeOf(direction), extend: shift };
+    if (byUnit) return { type: "paragraphEdge", direction, extend: shift };
     return { type: "moveAcross", direction, extend: shift };
   }
 
   switch (key) {
-    // Blink は縦書きだと何もしないが、使えないままにする理由が無い
+    // Blink は縦書きだと何もしないが、使えないままにする理由が無い。
+    // mod を足すと本文の端まで——macOS 以外は、ここでしか文頭・文末へ行けない
     case "Home":
-      return { type: "lineEdge", edge: "start", extend: shift };
+      return mod
+        ? { type: "docEdge", edge: "start", extend: shift }
+        : { type: "lineEdge", edge: "start", extend: shift };
     case "End":
-      return { type: "lineEdge", edge: "end", extend: shift };
+      return mod
+        ? { type: "docEdge", edge: "end", extend: shift }
+        : { type: "lineEdge", edge: "end", extend: shift };
     case "PageDown":
       return { type: "page", direction: 1, extend: shift };
     case "PageUp":
       return { type: "page", direction: -1, extend: shift };
     case "Backspace":
-      return { type: "delete", direction: -1, word: alt };
+      return { type: "delete", direction: -1, word: byUnit };
     case "Delete":
-      return { type: "delete", direction: 1, word: alt };
+      return { type: "delete", direction: 1, word: byUnit };
     case "Enter":
       return { type: "insert", text: "\n" };
     default:
       break;
   }
 
-  if (!accel) return null;
+  if (!mod) return null;
   switch (key.toLowerCase()) {
     case "a":
       return { type: "selectAll" };
@@ -80,8 +104,8 @@ export function commandFor(stroke: KeyStroke, writingMode: WritingMode): Command
 
 /**
  * 矢印キーを、画面で見た向きのまま軸に割り当てる。
- * 縦書きは字が下へ並び行が左へ重なるので、字送りが ↑↓・行送りが ←→ になる。
- * (ネイティブの textarea は縦書きでも ←→ が字送りのままで、そこだけ合わせていない)
+ * 縦書きは字が下へ並び行が左へ重なるので、インライン方向が ↑↓・ブロック方向が ←→ になる。
+ * (ネイティブの textarea は縦書きでも ←→ がインライン方向のままで、そこだけ合わせていない)
  */
 function arrowOf(key: string, writingMode: WritingMode): { axis: Axis; direction: 1 | -1 } | null {
   const vertical = writingMode === "vertical-rl";

@@ -75,7 +75,7 @@ export function caretBox(content: Content, caret: Caret): { rect: Rect; useEnd: 
   return before ? { rect: before, useEnd: true } : null;
 }
 
-/** キャレットの居場所 (surface 基準)。送り方向の厚みは持たない */
+/** キャレットの居場所 (surface 基準)。スクロール方向の厚みは持たない */
 export function caretRect(axis: Axis, content: Content, caret: Caret): CaretRect {
   const { fontBox, surface } = axis;
   const box = caretBox(content, caret);
@@ -94,7 +94,7 @@ export function caretRect(axis: Axis, content: Content, caret: Caret): CaretRect
 }
 
 /**
- * つまみの中心 (surface 基準)。選択の両端に 1 つずつ。
+ * ハンドルの中心 (surface 基準)。選択の両端に 1 つずつ。
  * キャレットだけのときは出さない——掴めるのは選択の端だけ
  */
 export function handlePoints(
@@ -114,7 +114,7 @@ export function handlePoints(
 }
 
 /**
- * 突いた点に着けるキャレット。offset は backend が引いたもので、
+ * クリックした点に着けるキャレット。offset は backend が引いたもので、
  * ここが決めるのは折り返しの境目をどちらの行に着けるかだけ
  */
 export function caretAtPoint(
@@ -128,22 +128,22 @@ export function caretAtPoint(
   const asStart = blockOfCaret(axis, caretRect(axis, content, { offset, preferEnd: false }));
   if (asEnd === asStart) return { offset, preferEnd: true };
 
-  // 突いた行の側に着ける
+  // クリックした行の側に着ける
   const at = blockOfPoint(axis, clientX, clientY);
   return { offset, preferEnd: Math.abs(at - asEnd) <= Math.abs(at - asStart) };
 }
 
-/** 行と送り位置で順に並ぶ鍵。offset が増えれば単調に増える */
+/** 行とインライン位置で順に並ぶ鍵。offset が増えれば単調に増える */
 function sortKey(axis: Axis, line: number, inline: number): number {
   return line * (layerLength(axis) + 1) + inline;
 }
 
 /**
- * 指定の行の、指定の送り位置にいちばん近いキャレット。
+ * 指定の行の、指定のインライン位置にいちばん近いキャレット。
  *
  * caretPositionFromPoint は描かれている場所しか当たらず、
  * overflow: hidden で隠れた行に移れない。offset の並びが
- * (行, 送り) の順と一致することを使って二分探索する。
+ * (行, インライン位置) の順と一致することを使って二分探索する。
  */
 export function caretInLine(axis: Axis, content: Content, line: number, inline: number): Caret {
   const { rendered } = content;

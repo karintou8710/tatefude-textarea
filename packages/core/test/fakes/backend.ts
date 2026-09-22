@@ -3,10 +3,10 @@ import type { Caret } from "../../src/text/caret";
 import { fakeLayout } from "./layout";
 
 /**
- * 偽のバックエンド。**呼ばれた順を覚えるだけ**で、何も描かない。
- * 組み立て (textarea.ts) が誰をどの順で叩くかを見るために使う。
+ * フェイクのバックエンド。**呼ばれた順を覚えるだけ**で、何も描かない。
+ * 組み立て (textarea.ts) が誰をどの順で呼ぶかを見るために使う。
  *
- * 隠し入力と指は本物が動くので、偽物は作らない。
+ * 隠し入力と指は本物が動くので、フェイクは作らない。
  * そのぶんブラウザが要るので、使うのは `test/browser/textarea.test.ts`。
  */
 export interface FakeBackend {

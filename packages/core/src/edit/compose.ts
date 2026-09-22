@@ -16,6 +16,7 @@ export function beginComposition(state: EditState, limits: Limits): Result {
       composition: composition.begin(cleared.state.head.offset),
     },
     changed: cleared.changed ?? "view",
+    scrollIntoView: true,
   };
 }
 
@@ -32,6 +33,7 @@ export function updateComposition(
       composition: composition.update(state.composition, text, activeStart, activeEnd),
     },
     changed: "view",
+    scrollIntoView: true,
   };
 }
 
@@ -40,7 +42,7 @@ export function endComposition(state: EditState, text: string, limits: Limits): 
   if (!state.composition) return unchanged(state);
   // 確定した文字列が空でも、預かっていた字と下線を消すために描き直す
   const cleared: EditState = { ...state, composition: null };
-  if (!text) return { state: cleared, changed: "view" };
+  if (!text) return { state: cleared, changed: "view", scrollIntoView: true };
   const result = insertAt(cleared, state.composition.start, text, limits);
-  return result.changed ? result : { state: cleared, changed: "view" };
+  return result.changed ? result : { state: cleared, changed: "view", scrollIntoView: true };
 }

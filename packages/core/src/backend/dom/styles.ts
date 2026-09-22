@@ -48,7 +48,7 @@ export function createElements(container: HTMLElement): Elements {
   layer.style.position = "absolute";
 
   // 絶対配置のはみ出しをスクロール領域として当てにすると、コンテナが変わったときの
-  // 追従がエンジン任せになる。送れる量は自分で置く
+  // 追従がエンジン任せになる。スクロールできる量は自分で置く
   const spacer = div();
 
   const content = div();
@@ -81,9 +81,9 @@ export function applyStyles(els: Elements, options: ResolvedOptions, metrics: Me
   // 縦組みの I ビームは横向き。text は横書き用
   els.surface.style.cursor = vertical ? "vertical-text" : "text";
 
-  // surface 自身を writingMode に置くと、送り方向のはみ出しがスクロール領域になる。
+  // surface 自身を writingMode に置くと、スクロール方向のはみ出しがスクロール領域になる。
   // vertical-rl では左へ伸びるので scrollLeft は 0 から負へ動く。
-  // touch-action を送り方向だけ開けて、パンはブラウザ、タップと長押しは pointer 側で拾う
+  // touch-action をスクロール方向だけ開けて、パンはブラウザ、タップと長押しは pointer 側で拾う
   Object.assign(els.surface.style, {
     writingMode,
     overflowX: vertical ? "auto" : "hidden",
@@ -174,8 +174,8 @@ export function syncSpacer(els: Elements, vertical: boolean, maxScroll: number):
  *
  * font も padding も禁則も CSS に置いたので、値はここからしか来ない。
  * padding を数値で取り直しているのは、surface が inset:0 で padding box に
- * 載る (= 余白のぶんは詰まらない) ため。余白は layer の位置と送りの余裕として
- * 自分で使う。ネイティブの textarea と同じく、字は余白の下まで送れる。
+ * 載る (= 余白のぶんは詰まらない) ため。余白は layer の位置とスクロールの余裕として
+ * 自分で使う。ネイティブの textarea と同じく、字は余白の下までスクロールできる。
  */
 export function readMetrics(container: HTMLElement): Metrics {
   const view = container.ownerDocument.defaultView;

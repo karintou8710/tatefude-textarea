@@ -13,7 +13,7 @@ describe("caretRect", () => {
     const first = geometry.caretRect(axis, content, { offset: 0, preferEnd: false });
     const second = geometry.caretRect(axis, content, { offset: 5, preferEnd: false });
     expect(first.x - second.x).toBe(axis.lineHeight);
-    // どちらも行の頭なので、送り方向は動かない
+    // どちらも行の頭なので、インライン方向は動かない
     expect(first.y).toBe(second.y);
   });
 
@@ -49,7 +49,7 @@ describe("caretRect", () => {
 });
 
 describe("caretInLine", () => {
-  it("指定の行の、指定の送り位置にいちばん近い字に着く", () => {
+  it("指定の行の、指定のインライン位置にいちばん近い字に着く", () => {
     const { axis, content } = fakeContent(TWO_LINES, 5);
     // 1 行目の 0〜20px は 5 文字目 (行頭)
     expect(geometry.caretInLine(axis, content, 1, 0).offset).toBe(5);
@@ -64,7 +64,7 @@ describe("caretInLine", () => {
     expect(geometry.caretInLine(axis, content, 1, 31).offset).toBe(7);
   });
 
-  it("隠れている行にも移れる。突いた場所ではなく行番号で引くから", () => {
+  it("隠れている行にも移れる。クリックした場所ではなく行番号で引くから", () => {
     const text = "あいうえお".repeat(20);
     const { axis, content, lineCount } = fakeContent(text, 5);
     expect(lineCount).toBe(20);
@@ -79,7 +79,7 @@ describe("caretInLine", () => {
 });
 
 describe("moveAcross", () => {
-  it("行を移っても送り方向の位置を保つ", () => {
+  it("行を移ってもスクロール位置を保つ", () => {
     const { axis, content, lineCount } = fakeContent(TWO_LINES, 5);
     const moved = geometry.moveAcross(
       axis,
@@ -157,11 +157,11 @@ describe("lineEdge", () => {
 });
 
 describe("caretAtPoint", () => {
-  it("折り返しの境目は、突いた行の側に着ける", () => {
+  it("折り返しの境目は、クリックした行の側に着ける", () => {
     const { axis, content } = fakeContent(TWO_LINES, 5);
     const onFirst = geometry.caretRect(axis, content, { offset: 5, preferEnd: true });
     const onSecond = geometry.caretRect(axis, content, { offset: 5, preferEnd: false });
-    // 縦書きなので、突いた x がどちらの行に近いかで決まる
+    // 縦書きなので、クリックした x がどちらの行に近いかで決まる
     const at = (x: number) => geometry.caretAtPoint(axis, content, 5, x, 0).preferEnd;
     expect(at(axis.surface.x + onFirst.x)).toBe(true);
     expect(at(axis.surface.x + onSecond.x)).toBe(false);
@@ -208,7 +208,7 @@ describe("handlePoints", () => {
 describe("pitchOf", () => {
   const at = (center: number): Rect => ({ x: center - 10, y: 0, width: 20, height: 20 });
 
-  it("いちばん狭い隙間が行送り。空行があっても引きずられない", () => {
+  it("いちばん狭い隙間が行送り。空行があっても引っ張られない", () => {
     // 100 と 70 は隣り合う行、10 は空行を挟んだ先
     expect(geometry.pitchOf(true, [at(100), at(70), at(10)], 99)).toBe(30);
   });

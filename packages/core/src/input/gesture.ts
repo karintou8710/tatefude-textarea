@@ -3,18 +3,18 @@ import type { Handle } from "../layout";
 /**
  * 指とマウスの判定。**DOM を知らない純粋な状態機械。**
  *
- * 出来事を受けて、新しい状態と「やること」を返す。実際に突いた場所が何文字目かを
+ * 出来事を受けて、新しい状態と「やること」を返す。実際にクリックした場所が何文字目かを
  * 引くのも、focus を入れるのも、呼び手 (pointer.ts) の仕事。
  * 閾値の判定はここに閉じているので、node のテストで縛れる。
  */
 
-/** これだけ動いたら、叩いたのではなくスクロール (CSS px) */
+/** これだけ動いたら、タップしたのではなくスクロール (CSS px) */
 const TAP_SLOP = 8;
 
 /** 置いたままこれだけ待たれたら長押し。iOS の作法に合わせる (ms) */
 export const LONG_PRESS = 500;
 
-/** 続けて叩いたと見なす間隔 (ms) と、その間に許す指のずれ (CSS px) */
+/** 続けてタップしたと見なす間隔 (ms) と、その間に許す指のずれ (CSS px) */
 const DOUBLE_TAP = 300;
 const DOUBLE_TAP_SLOP = 24;
 
@@ -31,7 +31,7 @@ export type PointerInput =
       shift: boolean;
       /** マウスで続けて押した回数 */
       clicks: number;
-      /** 突いた場所につまみがあるか。押す前にレイアウトへ聞いておく */
+      /** タップした場所にハンドルがあるか。押す前にレイアウトへ聞いておく */
       handle: Handle | null;
     }
   | { type: "move"; id: number; x: number; y: number }
@@ -41,13 +41,13 @@ export type PointerInput =
   | { type: "longPress"; id: number; x: number; y: number };
 
 export interface GestureState {
-  /** 指を置いた場所。離すまでは、叩いたのかスクロールなのか決まらない */
+  /** 指を置いた場所。離すまでは、タップしたのかスクロールなのか決まらない */
   readonly tap: { id: number; x: number; y: number } | null;
-  /** 引きずっている最中。extend なら伸ばす、でなければキャレットを動かす */
+  /** ドラッグしている最中。extend なら伸ばす、でなければキャレットを動かす */
   readonly drag: { extend: boolean } | null;
-  /** 直前に叩いた場所と時刻 */
+  /** 直前にタップした場所と時刻 */
   readonly lastTap: { at: number; x: number; y: number } | null;
-  /** 続けて叩かれた回数 */
+  /** 続けてタップされた回数 */
   readonly taps: number;
 }
 
@@ -100,8 +100,8 @@ function mouseDown(
   input: Extract<PointerInput, { type: "down" }>,
 ): GestureResult {
   const { x, y } = input;
-  // 触り直した。指でパンするならもう戻す先ではないし、叩くなら下で置き直す。
-  // マウスで触り直したら、指のためのつまみは引っ込める
+  // 触り直した。指でパンするならもう戻す先ではないし、タップするなら下で置き直す。
+  // マウスで触り直したら、指のためのハンドルは引っ込める
   const effects: GestureEffect[] = [{ type: "forgetAnchor" }, { type: "showHandles", show: false }];
 
   let next = state;
@@ -112,7 +112,7 @@ function mouseDown(
   } else {
     next = { ...state, drag: { extend: true } };
     // 測る → 置く → focus、の順。focus を先に入れると、その時点の
-    // 古いキャレットを見せるために送りが動き、突いた場所が画面ごとずれる
+    // 古いキャレットを見せるためにスクロールが動き、クリックした場所が画面ごとずれる
     effects.push(
       { type: "capture", id: input.id },
       { type: "placeCaret", x, y, extend: input.shift },
@@ -125,10 +125,10 @@ function mouseDown(
 /**
  * 指の割り当ては iOS の編集可能なテキストに合わせる。
  *
- * - 叩く … キャレットを置く
- * - 続けて 2 回 … 単語、3 回 … 段落。掴んだまま引きずれば伸びる
+ * - タップ … キャレットを置く
+ * - 続けて 2 回 … 単語、3 回 … 段落。掴んだままドラッグすれば伸びる
  * - 長押し … そのままキャレットを引き回す
- * - なぞる … スクロール (ブラウザに任せる)
+ * - スワイプ … スクロール (ブラウザに任せる)
  */
 function touchDown(
   state: GestureState,
@@ -137,8 +137,8 @@ function touchDown(
   const { x, y, id } = input;
   const effects: GestureEffect[] = [{ type: "forgetAnchor" }];
 
-  // つまみは押した時点で掴む。掴みに来た指を叩いた扱いにしても意味がない。
-  // つまみが出るのは選択があるときだけなので、叩く・なぞるとは競合しない
+  // ハンドルは押した時点で掴む。掴みに来た指をタップした扱いにしても意味がない。
+  // ハンドルが出るのは選択があるときだけなので、タップ・スワイプとは競合しない
   if (input.handle) {
     effects.push(
       { type: "cancelLongPress" },
@@ -153,7 +153,7 @@ function touchDown(
 
   if (taps >= 2) {
     // 合成マウスイベントは止めてあるので、ダブルクリックの回数は当てにできない。
-    // 2 回目を押した時点で選び、そのまま引きずれるようにする
+    // 2 回目を押した時点で選び、そのままドラッグできるようにする
     effects.push(
       taps >= 3 ? { type: "selectParagraph", x, y } : { type: "selectWord", x, y },
       { type: "showHandles", show: true },
@@ -163,14 +163,14 @@ function touchDown(
     return { state: { tap: null, lastTap, taps, drag: { extend: true } }, effects };
   }
 
-  // ここで focus を入れると、なぞっただけでキーボードが出てくる。離すまで待つ
+  // ここで focus を入れると、スワイプしただけでキーボードが出てくる。離すまで待つ
   effects.push({ type: "cancelLongPress" }, { type: "waitLongPress", id, x, y });
   return { state: { ...state, tap: { id, x, y }, lastTap, taps }, effects };
 }
 
 function move(state: GestureState, input: Extract<PointerInput, { type: "move" }>): GestureResult {
   if (state.tap?.id === input.id) {
-    // 指が動いたならスクロール。叩いた扱いも長押しもやめる
+    // 指が動いたならスクロール。タップした扱いも長押しもやめる
     if (!movedFromTap(input, state.tap)) return { state, effects: [] };
     return { state: forgetTap(state), effects: [{ type: "cancelLongPress" }] };
   }
@@ -187,8 +187,8 @@ function up(state: GestureState, input: Extract<PointerInput, { type: "up" }>): 
   const tap = state.tap;
 
   if (tap?.id === input.id && !movedFromTap(input, tap)) {
-    // 置いた場所から動かずに離した = 叩いた。ここで初めて focus を入れる。
-    // focus より先に置く。あとで入れると、古いキャレットを見せる送りに持っていかれる
+    // 置いた場所から動かずに離した = タップした。ここで初めて focus を入れる。
+    // focus より先に置く。あとで入れると、古いキャレットを見せるスクロールに持っていかれる
     effects.push(
       { type: "placeCaret", x: input.x, y: input.y, extend: input.shift },
       { type: "showHandles", show: true },
@@ -225,12 +225,12 @@ function stop(state: GestureState, id: number): GestureResult {
   return { state: { ...state, drag: null }, effects: [{ type: "release", id }] };
 }
 
-/** 叩いた扱いをやめる。続けて叩いた数も切る */
+/** タップした扱いをやめる。続けてタップした数も切る */
 function forgetTap(state: GestureState): GestureState {
   return { ...state, tap: null, lastTap: null, taps: 0 };
 }
 
-/** 続けて叩いたと言えるか。間隔と、指のずれの両方で見る */
+/** 続けてタップしたと言えるか。間隔と、指のずれの両方で見る */
 function isNearInTime(
   input: { at: number; x: number; y: number },
   previous: { at: number; x: number; y: number },

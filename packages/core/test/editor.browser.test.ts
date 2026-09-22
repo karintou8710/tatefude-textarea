@@ -4,6 +4,7 @@ import { CanvasTextarea } from "../src/canvas";
 import { DomTextarea } from "../src/dom";
 import type { Textarea } from "../src/textarea";
 import type { TextareaOptions, WritingMode } from "../src/types";
+import { byUnit, toDocEdge } from "./keys";
 import { applyStyle, canvasStyle, type TestStyle } from "./style";
 
 type Ctor = new (
@@ -115,6 +116,21 @@ function compose(textarea: HTMLTextAreaElement, reading: string, committed: stri
 }
 
 /** 描画は rAF に乗るので 2 フレーム待つ */
+/** 値が 2 フレーム続けて変わらなくなるまで待つ */
+async function settled(read: () => number, limit = 2000) {
+  const started = performance.now();
+  let last = Number.NaN;
+  let stable = 0;
+  while (performance.now() - started < limit) {
+    await nextFrames();
+    const now = read();
+    stable = now === last ? stable + 1 : 0;
+    last = now;
+    if (stable >= 2) return;
+  }
+  throw new Error(`落ち着かないまま ${limit}ms 過ぎた`);
+}
+
 function nextFrames() {
   return new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -247,8 +263,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
   });
 
   describe("キャレットの移動", () => {
-    // 矢印は画面で見た向きのまま。縦書きなら字送りが ↑↓ で、行送りが ←→ になる
-    it("字送りは 1 文字ずつ動く", () => {
+    // 矢印は画面で見た向きのまま。縦書きならインライン方向が ↑↓ で、ブロック方向が ←→ になる
+    it("インライン方向は 1 文字ずつ動く", () => {
       const { nextChar, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
       editor.commands.setSelection(0);
@@ -258,7 +274,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection.head).toBe(0);
     });
 
-    it("行送りは行を移る", () => {
+    it("ブロック方向は行を移る", () => {
       const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
       editor.commands.setSelection(0);
@@ -274,7 +290,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection.head).toBe(0);
     });
 
-    it("選んでいるときの字送りは選んだ端に畳む", () => {
+    it("選んでいるときのインライン方向は選んだ端に畳む", () => {
       const { nextChar, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいうえお" });
       editor.commands.setSelection(1, 3);
@@ -291,14 +307,14 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection).toEqual({ anchor: 3, head: 3 });
     });
 
-    it("端で止まった字送りは行を移るときの狙いを消さない", () => {
+    it("端で止まったインライン方向は行を移るときの狙いを消さない", () => {
       const { nextLine, prevLine, prevChar } = arrows();
       const { editor, textarea } = setup({ value: "あいう\nかきく" });
       editor.commands.setSelection(1);
       key(textarea, prevLine);
       expect(editor.state.selection.head).toBe(0);
 
-      // 文頭では動けない。ここで狙いを捨てると、次の行送りが行頭に落ちてしまう
+      // 文頭では動けない。ここで狙いを捨てると、次のブロック方向の移動が行頭に落ちてしまう
       key(textarea, prevChar);
       key(textarea, nextLine);
       expect(editor.state.selection.head).toBe(5);
@@ -307,7 +323,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     it("折り返しの境目に着いたキャレットは次の行の先頭に居る", () => {
       const { nextChar, nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: `あ\n${"あ".repeat(400)}` });
-      // 何文字目で折り返すかはフォント次第なので、行送りで境目を探す
+      // 何文字目で折り返すかはフォント次第なので、ブロック方向の移動で境目を探す
       editor.commands.setSelection(2);
       key(textarea, nextLine);
       const wrap = editor.state.selection.head;
@@ -384,24 +400,24 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection).toEqual({ anchor: 0, head: 2 });
     });
 
-    it("修飾キー付きの行送りで文頭と文末へ飛ぶ", () => {
-      const { nextLine, prevLine } = arrows();
+    it("文頭と文末へ飛ぶ", () => {
+      const lines = arrows();
       const { editor, textarea } = setup({ value: "あいう" });
       editor.commands.setSelection(1);
-      key(textarea, nextLine, { metaKey: true });
+      key(textarea, ...toDocEdge("end", lines));
       expect(editor.state.selection.head).toBe(3);
-      key(textarea, prevLine, { metaKey: true });
+      key(textarea, ...toDocEdge("start", lines));
       expect(editor.state.selection.head).toBe(0);
     });
 
-    it("Option 付きの行送りで段落の端へ飛ぶ", () => {
+    it("ブロック方向に語の修飾を足すと段落の端へ飛ぶ", () => {
       const { nextLine, prevLine } = arrows();
       const { editor, textarea } = setup({ value: "あい\nうえお\nかき" });
       editor.commands.setSelection(4);
-      key(textarea, prevLine, { altKey: true });
+      key(textarea, prevLine, byUnit);
       expect(editor.state.selection.head).toBe(3);
       // 段落の頭に居るときは、その段落の末まで
-      key(textarea, nextLine, { altKey: true });
+      key(textarea, nextLine, byUnit);
       expect(editor.state.selection.head).toBe(6);
     });
 
@@ -416,7 +432,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(head).toBeLessThan(400);
     });
 
-    it("行送りを繰り返しても文末へ飛ばない", () => {
+    it("ブロック方向へ繰り返し動いても文末へ飛ばない", () => {
       const { nextLine } = arrows();
       const { editor, textarea } = setup({ value: "あ".repeat(400) });
       editor.commands.setSelection(0);
@@ -473,12 +489,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
   });
 
   describe("指で触る", () => {
-    it("なぞっただけならキーボードを開かない", () => {
+    it("スワイプしただけならキーボードを開かない", () => {
       const { container, textarea } = setup({ value: "あ".repeat(400) });
       const at = middle(container);
 
       pointer(container, "pointerdown", at);
-      // 指を置いただけでは、叩いたのかスクロールなのかまだ決まらない
+      // 指を置いただけでは、タップしたのかスクロールなのかまだ決まらない
       expect(document.activeElement).not.toBe(textarea);
 
       pointer(container, "pointermove", { clientX: at.clientX - 60, clientY: at.clientY });
@@ -486,7 +502,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(document.activeElement).not.toBe(textarea);
     });
 
-    it("軽く叩いたらそこにキャレットが来る", () => {
+    it("軽くタップしたらそこにキャレットが来る", () => {
       const { container, editor, textarea } = setup({ value: "あ".repeat(400) });
       const at = middle(container);
 
@@ -497,7 +513,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection.head).toBeGreaterThan(0);
     });
 
-    it("ブラウザがスクロールを取ったら叩いた扱いにしない", () => {
+    it("ブラウザがスクロールを取ったらタップした扱いにしない", () => {
       const { container, textarea } = setup({ value: "あ".repeat(400) });
       const at = middle(container);
 
@@ -517,11 +533,11 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection.head).toBeGreaterThan(0);
     });
 
-    it("叩いた場所はコンテナが縮んでも動かない", async () => {
-      // キーボードは何段階かに分けて出てくる。組み直るたびに、突いた行は画面の同じところに残す
+    it("タップした場所はコンテナが縮んでも動かない", async () => {
+      // キーボードは何段階かに分けて出てくる。組み直るたびに、クリックした行は画面の同じところに残す
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
-      // 先頭からずらしておく。送りが 0 のままだと戻す先が合っていなくても気づけない
+      // 先頭からずらしておく。スクロールが 0 のままだと戻す先が合っていなくても気づけない
       editor.commands.setSelection(600);
       await nextFrames();
 
@@ -544,15 +560,15 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(Math.abs(blockOfCaret() - before)).toBeLessThan(1);
     });
 
-    it("なぞってから叩いても、指の下にキャレットが来る", async () => {
-      // focus の無いところを叩くと、focus を入れた時点で「古いキャレットを見せる」送りが入る。
-      // なぞって古いキャレットを画面の外へ出しておくと、それに引きずられて別の列に着く
+    it("スワイプしてからタップしても、指の下にキャレットが来る", async () => {
+      // focus の無いところをタップすると、focus を入れた時点で「古いキャレットを見せる」スクロールが入る。
+      // スワイプして古いキャレットを画面の外へ出しておくと、それに引っ張られて別の列に着く
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       editor.focus();
       editor.commands.setSelection(200);
       await nextFrames();
-      // キーボードを閉じた直後と同じ状態にして、指でなぞる
+      // キーボードを閉じた直後と同じ状態にして、指でスワイプする
       editor.blur();
       editor.scrollOffset += 1500;
       await nextFrames();
@@ -593,7 +609,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       }
     });
 
-    it("長押しでキャレットを置き、そのまま引きずって動かせる", async () => {
+    it("長押しでキャレットを置き、そのままドラッグして動かせる", async () => {
       // iOS の編集可能なテキストと同じ割り当て。単語選択はダブルタップ側に持たせる
       const { container, editor, textarea } = setup({ value: "吾輩は猫である。".repeat(40) });
       const at = middle(container);
@@ -604,7 +620,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const placed = editor.state.selection;
       expect(placed.anchor).toBe(placed.head);
 
-      // 掴んだままなぞると、キャレットが付いてくる (選択は伸びない)
+      // 掴んだままスワイプすると、キャレットが付いてくる (選択は伸びない)
       pointer(container, "pointermove", {
         clientX: at.clientX + 40,
         clientY: at.clientY + 40,
@@ -615,7 +631,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(moved.head).not.toBe(placed.head);
     });
 
-    it("なぞっている間は長押しにならない", async () => {
+    it("スワイプしている間は長押しにならない", async () => {
       const { container, editor, textarea } = setup({ value: "吾輩は猫である。".repeat(40) });
       const at = middle(container);
       const moved = { clientX: at.clientX - 40, clientY: at.clientY - 40 };
@@ -625,12 +641,12 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       await new Promise((resolve) => setTimeout(resolve, 600));
       pointer(container, "pointerup", moved);
 
-      // なぞっただけ。キーボードも出さないし、キャレットも動かさない
+      // スワイプしただけ。キーボードも出さないし、キャレットも動かさない
       expect(document.activeElement).not.toBe(textarea);
       expect(editor.state.selection).toEqual({ anchor: 0, head: 0 });
     });
 
-    it("続けて 2 回叩くと単語、3 回で段落を選ぶ", () => {
+    it("続けて 2 回タップすると単語、3 回で段落を選ぶ", () => {
       // 合成マウスイベントは止めてあるので、ダブルクリックの detail は当てにできない
       const { container, editor } = setup({ value: "吾輩は猫である。\nここで段落が変わる。" });
       const at = middle(container);
@@ -652,7 +668,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       );
     });
 
-    it("単語を選んだまま引きずると伸びる", () => {
+    it("単語を選んだままドラッグすると伸びる", () => {
       const { container, editor } = setup({ value: "吾輩は猫である。".repeat(40) });
       const at = middle(container);
 
@@ -671,7 +687,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       );
     });
 
-    it.runIf(ctor === DomTextarea)("つまみは選択の両端に出る", async () => {
+    it.runIf(ctor === DomTextarea)("ハンドルは選択の両端に出る", async () => {
       const { container, editor } = setup({ value: "吾輩は猫である。名前はまだ無い。".repeat(10) });
       const vertical = writingMode === "vertical-rl";
       const at = middle(container);
@@ -682,14 +698,14 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       await nextFrames();
       expect(container.querySelectorAll("[data-handle]")).toHaveLength(0);
 
-      // 続けて叩いて単語を選ぶと、両端に 1 つずつ
+      // 続けてタップして単語を選ぶと、両端に 1 つずつ
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
       await nextFrames();
       const dots = [...container.querySelectorAll("[data-handle]")] as HTMLElement[];
       expect(dots.map((el) => el.dataset.handle)).toEqual(["start", "end"]);
 
-      // 丸は棒から行送り方向の外側へ、半径ぶん押し出したところ
+      // 丸は棒からブロック方向の外側へ、半径ぶん押し出したところ
       const { anchor, head } = editor.state.selection;
       const [from, to] = anchor <= head ? [anchor, head] : [head, anchor];
       const box = container.getBoundingClientRect();
@@ -698,7 +714,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
         return { x: r.x + r.width / 2 - box.x, y: r.y + r.height / 2 - box.y };
       };
       const radius = 6;
-      // 測る前に控える。選択を畳むとつまみは消えてしまう
+      // 測る前に控える。選択を畳むとハンドルは消えてしまう
       const [startDot, endDot] = [centerOf(dots[0]), centerOf(dots[1])];
 
       editor.commands.setSelection(from);
@@ -720,8 +736,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       );
     });
 
-    it.runIf(ctor === DomTextarea)("選択の端のつまみを引くと、その端だけ動く", async () => {
-      // つまみは指の作法なので dom 経路だけが持つ
+    it.runIf(ctor === DomTextarea)("選択の端のハンドルを引くと、その端だけ動く", async () => {
+      // ハンドルは指の作法なので dom 経路だけが持つ
       const { container, editor } = setup({ value: "吾輩は猫である。".repeat(40) });
       const at = middle(container);
 
@@ -733,7 +749,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const word = editor.state.selection;
 
       const handle = container.querySelector('[data-handle="end"]') as HTMLElement | null;
-      if (!handle) throw new Error("つまみが描かれていない");
+      if (!handle) throw new Error("ハンドルが描かれていない");
       const box = handle.getBoundingClientRect();
       const from = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
       const to = { clientX: from.clientX + 30, clientY: from.clientY + 30 };
@@ -755,7 +771,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(600);
       await nextFrames();
 
-      // キーボードが出てくる側 (下端) の近くを叩く
+      // キーボードが出てくる側 (下端) の近くをタップする
       const box = container.getBoundingClientRect();
       const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height - 20 };
       pointer(container, "pointerdown", at);
@@ -808,14 +824,14 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(Math.abs(blockOfCaret() - before)).toBeLessThan(1);
     });
 
-    it("潰れる側を叩いても、キャレットは画面に残る", async () => {
-      // コンテナは行送り方向にも潰れる。潰れた側を叩いていると、戻す先がそのまま画面の外になる
+    it("潰れる側をタップしても、キャレットは画面に残る", async () => {
+      // コンテナはブロック方向にも潰れる。潰れた側をタップしていると、戻す先がそのまま画面の外になる
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       editor.commands.setSelection(600);
       await nextFrames();
 
-      // コンテナが減る側 (縦書きなら右端、横書きなら下端) の近くを叩く
+      // コンテナが減る側 (縦書きなら右端、横書きなら下端) の近くをタップする
       const box = container.getBoundingClientRect();
       const at = vertical
         ? { clientX: box.left + box.width - 20, clientY: box.top + box.height / 2 }
@@ -835,10 +851,10 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
     });
 
     it.each([
-      ["ホイールで送ったら", "wheel"],
-      ["指でなぞったら", "pan"],
-      ["外から送ったら", "api"],
-    ])("%s、叩いた場所には戻さない", async (_name, how) => {
+      ["ホイールでスクロールしたら", "wheel"],
+      ["指でスワイプしたら", "pan"],
+      ["外からスクロールしたら", "api"],
+    ])("%s、タップした場所には戻さない", async (_name, how) => {
       const { container, editor } = setup({ value: "あ".repeat(2000) });
       const vertical = writingMode === "vertical-rl";
       editor.commands.setSelection(600);
@@ -848,18 +864,18 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       pointer(container, "pointerdown", at);
       pointer(container, "pointerup", at);
 
-      // 自分で送った先が見たい位置。キャレットは画面の外へ出る
+      // 自分でスクロールした先が見たい位置。キャレットは画面の外へ出る
       if (how === "wheel") {
         const surface = container.firstElementChild as HTMLElement;
         surface.dispatchEvent(
           new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 2000 }),
         );
       } else if (how === "api") {
-        // 外から送る。ホイールと同じで、掴んだ場所へは戻さない
+        // 外からスクロールする。ホイールと同じで、掴んだ場所へは戻さない
         editor.scrollOffset += 2000;
       } else {
-        // 指のパンはブラウザが送る。こちらに届くのは「叩かなかった」ことだけ。
-        // 叩いた場所から始めると、続けて叩いた扱い (単語を掴んで伸ばす) になる
+        // 指のパンはブラウザがスクロールさせる。こちらに届くのは「タップしなかった」ことだけ。
+        // タップした場所から始めると、続けてタップした扱い (単語を掴んで伸ばす) になる
         const from = { clientX: at.clientX + 50, clientY: at.clientY + 50 };
         pointer(container, "pointerdown", from);
         pointer(container, "pointermove", {
@@ -874,13 +890,67 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       else container.style.width = "200px";
       await nextFrames();
 
-      // 戻す約束は解けている。見えるところまで送るだけなので、キャレットはコンテナの端の行に着く。
+      // 戻す約束は解けている。見えるところまでスクロールするだけなので、キャレットはコンテナの端の行に着く。
       // 端に寄せるのは行ボックス (36px) なので、キャレットの中心は余白から半行ぶん内側
       const rect = editor.caretRect;
       const center = vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2;
       const size = vertical ? container.clientWidth : container.clientHeight;
       const edge = 10 + 36 / 2;
       expect(Math.min(Math.abs(center - edge), Math.abs(size - edge - center))).toBeLessThan(1);
+    });
+  });
+
+  describe("スクロール", () => {
+    // 行送りに端数を出す (16 × 1.8 = 28.8)。デモの既定と同じで、
+    // 整数に丸まる寸法だと端までスクロールしても食い違いが起きない
+    const FRACTION = { size: 16, lineHeight: 1.8, padding: 10 };
+
+    const wheel = (container: HTMLElement) =>
+      (container.firstElementChild as HTMLElement).dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 400 }),
+      );
+
+    it("ホイールでブロック方向へスクロールする", () => {
+      const { container, editor } = setup({ value: "あ".repeat(2000) }, FRACTION);
+      expect(editor.scrollOffset).toBe(0);
+      wheel(container);
+      expect(editor.scrollOffset).toBeGreaterThan(0);
+    });
+
+    it("全選択ではスクロールしない。そのあと動かせば動く", async () => {
+      // いま指した一点が無いので画面に入れる相手が居ない。ネイティブの textarea も動かさない
+      const { container, editor, textarea } = setup({ value: "あ".repeat(2000) }, FRACTION);
+      const { prevChar } = arrows();
+      editor.focus();
+      editor.commands.setSelection(0);
+      // ResizeObserver の初回を先に流す。コンテナが変わったときは follow が
+      // キャレットを追うので、混ぜると全選択のせいに見えてしまう。
+      // 送りが落ち着くまで待つ (初回の observer は rAF を跨いで来ることがある)
+      await settled(() => editor.scrollOffset);
+      for (let i = 0; i < 5; i++) wheel(container);
+      const away = editor.scrollOffset;
+      expect(away).toBeGreaterThan(0);
+
+      key(textarea, "a", { metaKey: true });
+      await nextFrames();
+      expect(editor.state.selection).toEqual({ anchor: 0, head: 2000 });
+      expect(editor.scrollOffset).toBeCloseTo(away, 0);
+
+      // 選択を畳むと文頭へ動くので、そこで初めてスクロールする
+      key(textarea, prevChar);
+      await nextFrames();
+      expect(editor.scrollOffset).toBeLessThan(away);
+    });
+
+    it("スクロールしきってから回しても先頭へ戻らない", () => {
+      // ブラウザがスクロールできる量は整数、こちらの見積もりは端数を持つ。
+      // 端でその差を規約の違いと読むと、正の値を書いて先頭へ飛んでいた
+      const { container, editor } = setup({ value: "あ".repeat(2000) }, FRACTION);
+      for (let i = 0; i < 60; i++) wheel(container);
+      const end = editor.scrollOffset;
+      expect(end).toBeGreaterThan(0);
+      wheel(container);
+      expect(editor.scrollOffset).toBeCloseTo(end, 0);
     });
   });
 
@@ -1025,6 +1095,31 @@ describe("描画", () => {
     expect(container.querySelector("[data-caret]")).not.toBeNull();
   });
 
+  it("変換中の下線は縦書きなら字の左", async () => {
+    // ネイティブの textarea に合わせる。既定 (auto) だと日本語のときだけ右へ回り、
+    // 判定がフォントのスクリプト由来なのでホストページの lang にも振られる
+    const { container, editor } = mount({ value: "あいう" });
+    editor.focus();
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    textarea.value = "なまえ";
+    textarea.setSelectionRange(1, 3);
+    textarea.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertCompositionText",
+        data: "なまえ",
+      }),
+    );
+    await painted();
+
+    const spans = [...container.querySelectorAll("span")];
+    expect(spans.length).toBeGreaterThan(0);
+    for (const span of spans) {
+      expect(getComputedStyle(span).textUnderlinePosition).toBe("left");
+    }
+  });
+
   it("フォーカスが無ければキャレットを出さない", async () => {
     const { container, editor } = mount({ value: "あいうえお" });
     editor.commands.setSelection(1);
@@ -1062,6 +1157,32 @@ describe("描画", () => {
     editor.commands.insertText("か");
     await painted();
     expect(document.querySelector("[data-caret]")).not.toBeNull();
+  });
+
+  it("選択が伸びている間は数え直さない", async () => {
+    // キャレットを出さないので、点滅で描き直しても何も変わらない。
+    // dom は選択の矩形を取り直して div を作り直すので、選択が長いほど無駄が増える
+    const { container, editor } = mount({
+      value: "吾輩は猫である。".repeat(20),
+      caretBlinkInterval: 60,
+    });
+    editor.focus();
+    editor.commands.setSelection(0, 100);
+    await painted();
+    expect(document.querySelector("[data-caret]")).toBeNull();
+
+    // 描き直しは層を空にしてから積み直す。取り除かれた回数を数えれば回数が出る
+    let repaints = 0;
+    const observer = new MutationObserver((records) => {
+      repaints += records.filter((record) => record.removedNodes.length > 0).length;
+    });
+    for (const el of container.querySelectorAll("div")) observer.observe(el, { childList: true });
+    const started = performance.now();
+    while (performance.now() - started < 300) await painted();
+    observer.disconnect();
+
+    // 点滅していれば 60ms ごとに描き直す。落ち着くまでの 1 回は許す
+    expect(repaints).toBeLessThanOrEqual(1);
   });
 
   it("間隔が 0 なら点滅しない", async () => {

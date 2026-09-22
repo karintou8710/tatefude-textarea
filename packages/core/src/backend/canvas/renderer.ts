@@ -123,7 +123,7 @@ export class Renderer {
         ctx.save();
         ctx.translate(center, top);
         ctx.rotate(Math.PI / 2);
-        // 回した先では +x が送り方向 (下)、textBaseline middle が列の中心に乗る
+        // 回した先では +x がインライン方向 (下)、textBaseline middle が列の中心に乗る
         ctx.textAlign = "left";
         ctx.fillText(ch.text, 0, 0);
         ctx.restore();
@@ -143,7 +143,7 @@ export class Renderer {
       if (from >= to) return;
       ctx.fillStyle = color;
       for (const rect of selectionRects(layout, geometry, from, to)) {
-        // 下線は行の block-end 側。縦書きなら左、横書きなら下
+        // 縦書きなら字の左、横書きなら下。ネイティブの textarea に合わせる
         const gap = (geometry.lineHeight - geometry.em) / 2;
         if (vertical) ctx.fillRect(rect.x + gap - thickness, rect.y, thickness, rect.height);
         else ctx.fillRect(rect.x, rect.y + rect.height - gap, rect.width, thickness);

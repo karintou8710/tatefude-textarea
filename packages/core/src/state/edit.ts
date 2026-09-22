@@ -17,7 +17,7 @@ export interface EditState {
   readonly anchor: number;
   /** 選択の動く側 */
   readonly head: Caret;
-  /** 行を跨ぐときに保つ、元いた字送り方向の位置 */
+  /** 行を跨ぐときに保つ、元いたインライン方向の位置 */
   readonly goal: Goal;
   readonly history: HistoryState;
   /** 預かっている変換中の字。変換していなければ null */
@@ -46,10 +46,19 @@ export type Changed = "edit" | "selection" | "view" | null;
 export interface Result {
   readonly state: EditState;
   readonly changed: Changed;
+  /**
+   * キャレットを画面に入れるか。**決めるのは操作の側。**
+   *
+   * 打つ・消す・変換と、キャレットを動かす操作だけ true。
+   * 全選択・undo・外からの差し替えは、いま指した一点が無いので入れない
+   * (ネイティブの `<textarea>` もそうなっている)。
+   * 実際に送るのは `textarea.ts` で、こちらは画面を触らない
+   */
+  readonly scrollIntoView: boolean;
 }
 
 export function unchanged(state: EditState): Result {
-  return { state, changed: null };
+  return { state, changed: null, scrollIntoView: false };
 }
 
 /** options から来る、編集にかかる制限 */

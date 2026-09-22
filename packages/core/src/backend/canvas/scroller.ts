@@ -3,10 +3,10 @@ import type { Scroller, ViewState } from "../backend";
 import { readScroll, writeScroll } from "../scroll";
 
 /**
- * 送りがレイアウトから要るものは、これだけ。
+ * スクロールがレイアウトから要るものは、これだけ。
  *
  * 値ではなく関数で受けるのは、どれもレイアウトのたびに変わるため。
- * 掴んで持つと、コンテナが縮んだあとに古い寸法で送ることになる。
+ * 掴んで持つと、コンテナが縮んだあとに古い寸法でスクロールすることになる。
  */
 export interface ScrollHost {
   /** スクロールコンテナ。ホイールもここで拾う */
@@ -14,31 +14,31 @@ export interface ScrollHost {
   vertical(): boolean;
   /** 測った行送り */
   lineHeight(): number;
-  /** 送り方向に見えている長さ。余白は除く */
+  /** スクロール方向に見えている長さ。余白は除く */
   visibleBreadth(): number;
-  /** レイアウト全体が送り方向に占める長さ */
+  /** レイアウト全体がスクロール方向に占める長さ */
   totalBreadth(): number;
   /** キャレットが乗る行の番号 */
   lineOf(caret: Caret): number;
   /**
-   * キャレットの行送り方向の中心。
-   * 送りの自由度は block 方向しかないので、矩形そのものは要らない
+   * キャレットのブロック方向の中心。
+   * スクロールの自由度は block 方向しかないので、矩形そのものは要らない
    */
   blockCenterOf(caret: Caret): number;
-  /** 送りが動いた。描く側へ移してもらう */
+  /** スクロールが動いた。描く側へ移してもらう */
   scrolled(): void;
   /** いま表示している状態。まだ何も来ていなければ null */
   state(): ViewState | null;
 }
 
 /**
- * 送り方向の位置だけを持つ。dom 側の DomScroller と同じ役。
+ * スクロール位置だけを持つ。dom 側の DomScroller と同じ役。
  *
  * 違うのは「キャレットを画面に入れる」やり方だけで、canvas は行番号から
  * 直に出せる (組版を自分で持っているから)。矩形を測り直す dom とはそこが逆。
  */
 export class CanvasScroller implements Scroller {
-  /** 次のレイアウトで戻す先。突いた時点のキャレットの block 座標 */
+  /** 次のレイアウトで戻す先。クリックした時点のキャレットの block 座標 */
   private anchor: { block: number; offset: number } | null = null;
   private followFrame = 0;
   private disposers: (() => void)[] = [];
@@ -49,7 +49,7 @@ export class CanvasScroller implements Scroller {
     this.bindWheel();
   }
 
-  /** 送り方向に読み進んだ量。向きに依らず 0 以上 */
+  /** スクロール方向に読み進んだ量。向きに依らず 0 以上 */
   get scrollOffset(): number {
     return readScroll(this.host.surface, this.host.vertical());
   }
@@ -69,7 +69,7 @@ export class CanvasScroller implements Scroller {
     const breadth = this.host.visibleBreadth();
     if (breadth === 0) return;
     const lineHeight = this.host.lineHeight();
-    // 送りぶんを引く前の、行の手前と奥 (block 方向)。縦書きなら右端と左端
+    // スクロールぶんを引く前の、行の手前と奥 (block 方向)。縦書きなら右端と左端
     const near = lineHeight * this.host.lineOf(caret);
     const far = near + lineHeight;
 
@@ -110,15 +110,15 @@ export class CanvasScroller implements Scroller {
     // focus が無いならキャレットを見せる理由もない。キーボードが閉じたあとの
     // レイアウトはここを通る。戻す先があればそれで足りている
     if (!state.focused) return;
-    // 戻す先がコンテナの外に出ることがある。キーボードは行送り方向に潰してくるので、
-    // 潰れた側を叩いていると戻す先がそのまま画面の外になる。最後に必ず入れ直す
+    // 戻す先がコンテナの外に出ることがある。キーボードはブロック方向に潰してくるので、
+    // 潰れた側をタップしていると戻す先がそのまま画面の外になる。最後に必ず入れ直す
     this.ensureVisible(state.caret);
   }
 
   /**
    * 確定した寸法でもう一度追う保険。
-   * コンテナが変われば列数も変わり、送れる上限 (maxScroll) も変わる。
-   * 同期パスで送りきれていれば同じ値になり、見た目には何も起きない
+   * コンテナが変われば列数も変わり、スクロールできる上限 (maxScroll) も変わる。
+   * 同期パスでスクロールしきれていれば同じ値になり、見た目には何も起きない
    */
   scheduleFollow(): void {
     const view = this.host.surface.ownerDocument.defaultView;
@@ -141,11 +141,11 @@ export class CanvasScroller implements Scroller {
 
   /**
    * キャレットの block 座標を anchor に戻す。
-   * 送りの自由度は block 方向しかないので、inline 方向 (縦書きなら y) はレイアウト任せ
+   * スクロールの自由度は block 方向しかないので、inline 方向 (縦書きなら y) はレイアウト任せ
    */
   private keepCaretAt(caret: Caret, anchor: number): void {
     const gap = anchor - this.host.blockCenterOf(caret);
-    // 符号は ensureVisible と同じ規則。縦書きは送りを増やすと x も増える
+    // 符号は ensureVisible と同じ規則。縦書きはスクロールを増やすと x も増える
     this.scrollOffset = this.scrollOffset + (this.host.vertical() ? gap : -gap);
   }
 
@@ -167,7 +167,7 @@ export class CanvasScroller implements Scroller {
     const listener = (event: WheelEvent) => {
       if (this.maxScroll() <= 0) return;
       event.preventDefault();
-      // 自分で送った先が見たい位置。突いた場所へは戻さない
+      // 自分でスクロールした先が見たい位置。クリックした場所へは戻さない
       this.forgetAnchor();
       const delta = this.host.vertical() ? event.deltaY - event.deltaX : event.deltaY;
       this.scrollOffset = this.scrollOffset + delta;

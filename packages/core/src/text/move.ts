@@ -9,7 +9,7 @@ export function moveInline(text: string, caret: Caret, direction: 1 | -1, byWord
     ? stepWord(text, caret.offset, direction)
     : stepGrapheme(text, caret.offset, direction);
   // 字を送って着いた境目は、行き帰りとも次の行の先頭に見せる。
-  // 前の行の末尾に出るのは行末へ飛んだときと、行の外を突いたときだけ (Blink も同じ)
+  // 前の行の末尾に出るのは行末へ飛んだときと、行の外をクリックしたときだけ (Blink も同じ)
   return { offset, preferEnd: false };
 }
 

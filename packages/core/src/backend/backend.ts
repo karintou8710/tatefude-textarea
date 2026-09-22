@@ -11,7 +11,7 @@ export interface ViewState {
   caret: Caret;
   caretVisible: boolean;
   focused: boolean;
-  /** 選択の両端につまみを出すか。指で触ったときだけ出す */
+  /** 選択の両端にハンドルを出すか。指で触ったときだけ出す */
   handles: boolean;
   composition: CompositionRange | null;
   /** 本文が空のときだけ入る */
@@ -25,16 +25,20 @@ export interface Painter {
    * CSS を読み直してレイアウトし直す。
    * 見た目は CSS に置いたが、CSS には「変わった」を知らせる口が無い。
    * コンテナの寸法なら ResizeObserver で足りるものの、字の大きさや余白を
-   * 変えてもコンテナは動かないので、変えた側から叩いてもらう。
+   * 変えてもコンテナは動かないので、変えた側から呼んでもらう。
    */
   refresh(): void;
-  /** 描き直すだけ。送りは動かさない (点滅など) */
+  /** 描き直すだけ。スクロールは動かさない (点滅など) */
   update(state: ViewState): void;
   /**
    * 描き直して、キャレットを見える位置に置き、そこを控える。
-   * 本文や選択が動いたときはこちら。送りをどう動かすかは中の事情なので外へ出さない
+   * 本文や選択が動いたときはこちら。スクロールをどう動かすかは中の事情なので外へ出さない
    */
-  show(state: ViewState): void;
+  /**
+   * 本文や選択が動いたときはこちら。スクロールをどう動かすかは中の事情なので外へ出さない。
+   * `scrollIntoView` が true なら、キャレットを画面に入れてから描く
+   */
+  show(state: ViewState, scrollIntoView: boolean): void;
 }
 
 /**

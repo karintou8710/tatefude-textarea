@@ -3,7 +3,7 @@ import type { WritingMode } from "../types";
 /**
  * DOM の入力を、繋ぐ側から見た形。
  *
- * `textarea.ts` が叩けるものをここに絞る。実装は 1 つずつしか無いので
+ * `textarea.ts` が呼べるものをここに絞る。実装は 1 つずつしか無いので
  * 差し替えるためではなく、**繋ぐ側が何に依っているかを見せるため**の型。
  */
 
@@ -12,7 +12,7 @@ import type { WritingMode } from "../types";
  * ——options が増えても、隠し入力が読めるものは増えない
  */
 export interface InputOptions {
-  /** 矢印の向きを決める。縦書きなら ↑↓ が字送り */
+  /** 矢印の向きを決める。縦書きなら ↑↓ がインライン方向 */
   writingMode: WritingMode;
   readOnly: boolean;
   disabled: boolean;

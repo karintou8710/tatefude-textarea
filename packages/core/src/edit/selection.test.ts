@@ -70,7 +70,7 @@ describe("まとまりで選ぶ", () => {
     expect(selectedText(state)).toBe("うえ");
   });
 
-  it("つまみを掴むと、掴んだ側が focus になる", () => {
+  it("ハンドルを掴むと、掴んだ側が focus になる", () => {
     const selected = setSelection(newEditState("あいうえお"), 1, 4).state;
     expect(selection(grabHandle(selected, "start").state)).toEqual({ anchor: 4, head: 1 });
     expect(selection(grabHandle(selected, "end").state)).toEqual({ anchor: 1, head: 4 });

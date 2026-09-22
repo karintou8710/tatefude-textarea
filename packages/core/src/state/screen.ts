@@ -7,7 +7,7 @@
 export interface ScreenState {
   /** 隠し入力が focus を持っているか */
   readonly focused: boolean;
-  /** 選択の端につまみを出すか。指で触ったときだけ立てる */
+  /** 選択の端にハンドルを出すか。指で触ったときだけ立てる */
   readonly handles: boolean;
 }
 
@@ -18,11 +18,11 @@ export const newScreenState: ScreenState = {
 
 export function setFocused(screen: ScreenState, focused: boolean): ScreenState {
   if (screen.focused === focused) return screen;
-  // focus を失ったらつまみも引っ込める
+  // focus を失ったらハンドルも引っ込める
   return { ...screen, focused, handles: focused && screen.handles };
 }
 
-/** つまみの出し入れ。指で触ったら出し、打ったら引っ込める */
+/** ハンドルの出し入れ。指で触ったら出し、打ったら引っ込める */
 export function showHandles(screen: ScreenState, handles: boolean): ScreenState {
   if (screen.handles === handles) return screen;
   return { ...screen, handles };

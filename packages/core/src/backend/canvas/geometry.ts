@@ -14,7 +14,7 @@ export interface Geometry {
   em: number;
   /** 字が入っている箱の、行を横切る向きの長さ (ascent + descent)。行送りは含まない */
   textBox: number;
-  /** 行送り (block) 方向に送った量 */
+  /** ブロック方向へスクロールした量 */
   scroll: number;
 }
 
@@ -43,7 +43,7 @@ export function contentLength(geo: Geometry): number {
   return Math.max(geo.em, length);
 }
 
-/** 行送り方向に見えている幅 (block 方向) */
+/** ブロック方向に見えている幅 */
 export function contentBreadth(geo: Geometry): number {
   const { padding } = geo;
   const breadth = isVertical(geo)
@@ -57,7 +57,7 @@ export function totalBreadth(layout: Layout, geo: Geometry): number {
   return layout.lines.length * geo.lineHeight;
 }
 
-/** block 方向の、行の頭からの距離 (送りぶんを引いたもの) */
+/** block 方向の、行の頭からの距離 (スクロールぶんを引いたもの) */
 function blockAt(geo: Geometry, index: number): number {
   return geo.lineHeight * index - geo.scroll;
 }
@@ -112,7 +112,7 @@ export function offsetInLine(line: LayoutLine, offset: number): number {
 }
 
 /**
- * キャレットの矩形。Range の潰れた矩形と同じで、送り方向の厚みは持たない。
+ * キャレットの矩形。Range の潰れた矩形と同じで、スクロール方向の厚みは持たない。
  * 行を横切る向きの長さは字が入っている箱ぶん (ascent + descent) で、行送りは含めない。
  * 行の真ん中に置く。
  * (Blink も caret_rect.cc で字の箱の大きさを使う。行ボックスは位置を収めるためだけ)

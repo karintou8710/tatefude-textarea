@@ -7,5 +7,5 @@ export interface Caret {
   readonly preferEnd: boolean;
 }
 
-/** 行を跨いで動くときに保つ「元いた送り方向の位置」 */
+/** 行を跨いで動くときに保つ「元いたスクロール位置」 */
 export type Goal = number | null;

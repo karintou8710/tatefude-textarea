@@ -17,9 +17,9 @@ export interface PointerActions {
   placeCaret(caret: Caret, extend: boolean): void;
   selectWord(offset: number): void;
   selectParagraph(offset: number): void;
-  /** 選択の端につまみを出すか */
+  /** 選択の端にハンドルを出すか */
   showHandles(show: boolean): void;
-  /** つまみを掴む。反対の端を anchor に置き直す */
+  /** ハンドルを掴む。反対の端を anchor に置き直す */
   grabHandle(handle: Handle): void;
   focus(): void;
 }
@@ -28,9 +28,9 @@ export interface PointerActions {
  * 指とマウスの受け口。**DOM のイベントを判定 (gesture.ts) に流して、決まったことを実行する。**
  *
  * ここに置くのはブラウザの都合だけ——合成イベントの打ち消し、ポインタの捕捉、
- * 長押しのタイマ。何を叩いたことにするかは gesture.ts が決める。
+ * 長押しのタイマ。何をタップしたことにするかは gesture.ts が決める。
  *
- * レイアウトからは「突いた場所が何文字目か」(`Hits`) と
+ * レイアウトからは「クリックした場所が何文字目か」(`Hits`) と
  * 「戻す先を忘れる」(`Scroller`) しか要らないので、その 2 つだけ受ける。
  */
 export class PointerGestures implements Pointer {
@@ -82,7 +82,7 @@ export class PointerGestures implements Pointer {
     // 出どころの touchend で止める。押した先はもう pointer 側で処理済み
     on("touchend", (event) => event.preventDefault(), { passive: false });
 
-    // 指で引きずっている間はパンさせない。touch-action は指を置いた時点で
+    // 指でドラッグしている間はパンさせない。touch-action は指を置いた時点で
     // 決まってしまうので、始まったあとに止めるにはこちらで断るしかない
     on("touchmove", (event) => this.state.drag && event.preventDefault(), { passive: false });
 
@@ -99,7 +99,7 @@ export class PointerGestures implements Pointer {
         touch,
         shift: event.shiftKey,
         clicks: event.detail,
-        // つまみは指のときだけ出す
+        // ハンドルは指のときだけ出す
         handle: touch ? this.hits.hitHandle(event.clientX, event.clientY) : null,
       });
     });

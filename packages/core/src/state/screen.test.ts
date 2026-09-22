@@ -13,7 +13,7 @@ describe("画面の状態", () => {
     expect(newScreenState.focused).toBe(false);
   });
 
-  it("focus を失ったらつまみも引っ込める", () => {
+  it("focus を失ったらハンドルも引っ込める", () => {
     const touched = showHandles(setFocused(newScreenState, true), true);
     expect(touched.handles).toBe(true);
     expect(setFocused(touched, false).handles).toBe(false);

@@ -3,7 +3,7 @@ import { paragraphEdge } from "./move";
 import { paragraphRangeAt, wordRangeAt } from "./range";
 
 describe("語", () => {
-  it("突いた場所に乗っている語を取る", () => {
+  it("クリックした場所に乗っている語を取る", () => {
     expect(wordRangeAt("今日はいい天気", 1)).toEqual([0, 2]);
   });
 

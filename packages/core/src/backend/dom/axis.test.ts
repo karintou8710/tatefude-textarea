@@ -54,7 +54,7 @@ describe("縦書きと横書きで軸が入れ替わる", () => {
   });
 
   describe("inline の始端と終端", () => {
-    it("終端から始端を引くと、字が送り方向に占める長さになる", () => {
+    it("終端から始端を引くと、字がスクロール方向に占める長さになる", () => {
       const glyph = rect(60, 70, 18, 24);
       for (const a of [vertical, horizontal]) {
         const start = axis.inlineStartOf(a, glyph);
@@ -91,7 +91,7 @@ describe("縦書きと横書きで軸が入れ替わる", () => {
       expect(axis.blockOfCaret(horizontal, horizontalCaret)).toBe(88);
     });
 
-    it("inline は送り方向の位置。厚みを持たない側をそのまま取る", () => {
+    it("inline はスクロール位置。厚みを持たない側をそのまま取る", () => {
       expect(axis.inlineOfCaret(vertical, verticalCaret)).toBe(80);
       expect(axis.inlineOfCaret(horizontal, horizontalCaret)).toBe(50);
     });
@@ -113,7 +113,7 @@ describe("縦書きと横書きで軸が入れ替わる", () => {
   });
 
   describe("blockOfPoint", () => {
-    it("突いた点を surface 基準の block 位置に直す。縦書きは x、横書きは y", () => {
+    it("クリックした点を surface 基準の block 位置に直す。縦書きは x、横書きは y", () => {
       expect(axis.blockOfPoint(vertical, 100, 70)).toBe(90);
       expect(axis.blockOfPoint(horizontal, 100, 70)).toBe(50);
     });
@@ -128,7 +128,7 @@ describe("lineAt", () => {
     expect(axis.lineAt(vertical, 95)).toBe(3);
   });
 
-  it("コンテナの外を突いても 0 行目より手前へは行かない", () => {
+  it("コンテナの外をクリックしても 0 行目より手前へは行かない", () => {
     expect(axis.lineAt(vertical, -1)).toBe(0);
     expect(axis.lineAt(vertical, -1000)).toBe(0);
   });

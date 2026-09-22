@@ -15,7 +15,7 @@ export interface PlacedChar {
   start: number;
   end: number;
   orientation: Orientation;
-  /** 行の中での、送り方向 (下向き) の開始位置 */
+  /** 行の中での、インライン方向 (下向き) の開始位置 */
   offset: number;
   advance: number;
 }
@@ -29,7 +29,7 @@ export interface LayoutLine {
   start: number;
   end: number;
   chars: PlacedChar[];
-  /** 送り方向に使っている長さ */
+  /** インライン方向に使っている長さ */
   length: number;
   /** この行が改行文字で終わるか。折り返しなら false */
   hardBreak: boolean;
@@ -37,7 +37,7 @@ export interface LayoutLine {
 
 export interface Layout {
   lines: LayoutLine[];
-  /** 送り方向に使える長さ */
+  /** インライン方向に使える長さ */
   maxLineLength: number;
 }
 
@@ -64,7 +64,7 @@ export function layoutText({
   kinsoku,
   writingMode = "vertical-rl",
 }: LayoutParams): Layout {
-  // 横書きでは字を倒す必要が無く、送りは横書きの字幅そのもの
+  // 横書きでは字を倒す必要が無く、送り量は横書きの字幅そのもの
   const vertical = writingMode === "vertical-rl";
   const orientationOfChar = (ch: string): Orientation => (vertical ? orientationOf(ch) : "upright");
   const advanceOf = (ch: string, orientation: Orientation) =>

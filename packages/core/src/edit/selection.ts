@@ -15,6 +15,8 @@ export function setSelection(state: EditState, anchor: number, head = anchor): R
       history: history.breakCoalescing(state.history),
     },
     changed: "selection",
+    // 場所を渡されただけ。いま指した一点ではないので画面には入れない
+    scrollIntoView: false,
   };
 }
 
@@ -38,6 +40,7 @@ export function moveCaret(
       history: history.breakCoalescing(state.history),
     },
     changed: "selection",
+    scrollIntoView: true,
   };
 }
 
@@ -52,7 +55,7 @@ export function selectParagraph(state: EditState, offset: number): Result {
 }
 
 /**
- * つまみを掴んだ。動かす側を head に、反対の端を anchor に置き直す。
+ * ハンドルを掴んだ。動かす側を head に、反対の端を anchor に置き直す。
  * あとは伸ばすだけになるので、掴んだあとの扱いはドラッグと同じ
  */
 export function grabHandle(state: EditState, handle: Handle): Result {

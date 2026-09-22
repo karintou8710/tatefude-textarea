@@ -20,7 +20,7 @@ export interface CaretRect {
   height: number;
 }
 
-/** 選択の端につくつまみ。潰れているときは出さない */
+/** 選択の端につくハンドル。潰れているときは出さない */
 export type Handle = "start" | "end";
 
 /**
@@ -39,7 +39,7 @@ export type Handle = "start" | "end";
  * → [docs/decisions/0008](../../../docs/decisions/0008-最小実装は別パッケージで持たない.md)
  */
 export interface Lines {
-  /** 行送り方向に何行ぶん見えているか */
+  /** ブロック方向に何行ぶん見えているか */
   linesPerPage(): number;
   /** 行を移る。縦書きでは direction 1 が左 (次の行) */
   moveAcross(caret: Caret, direction: 1 | -1, goal: Goal): { caret: Caret; goal: Goal };
@@ -47,11 +47,11 @@ export interface Lines {
   lineEdge(caret: Caret, edge: "start" | "end"): Caret;
 }
 
-/** ① 突いた場所を数える受け口が聞くもの */
+/** ① クリックした場所を数える受け口が聞くもの */
 export interface Hits {
   /** クライアント座標 → キャレット */
   hitTest(clientX: number, clientY: number): Caret;
-  /** そこにつまみがあるか。描いた側が答える */
+  /** そこにハンドルがあるか。描いた側が答える */
   hitHandle(clientX: number, clientY: number): Handle | null;
 }
 
@@ -78,12 +78,12 @@ export interface Measures {
 }
 
 /**
- * 送り方向の位置。慣性もラバーバンドもブラウザ側にあるので、
+ * スクロール位置。慣性もラバーバンドもブラウザ側にあるので、
  * ここが持つのは「いくつ送られているか」と「どこまで戻すか」だけ。
  */
 export interface Scroller {
-  /** 行送り方向に読み進んだ量 (px)。向きに依らず 0 以上 */
+  /** ブロック方向に読み進んだ量 (px)。向きに依らず 0 以上 */
   scrollOffset: number;
-  /** 戻す約束を解く。触り直したら、前に突いた場所はもう用済み */
+  /** 戻す約束を解く。触り直したら、前にクリックした場所はもう用済み */
   forgetAnchor(): void;
 }

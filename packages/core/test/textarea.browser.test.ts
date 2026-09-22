@@ -6,9 +6,9 @@ import { fakeBackend } from "./fakes/backend";
 import { applyStyle } from "./style";
 
 /**
- * 組み立て (textarea.ts) が誰をどの順で叩くかを見る。
+ * 組み立て (textarea.ts) が誰をどの順で呼ぶかを見る。
  *
- * バックエンドだけ偽物にして、隠し入力と指は本物を動かす。
+ * バックエンドだけフェイクにして、隠し入力と指は本物を動かす。
  * **差し替えられるのは backend だけ**なので、ここはブラウザで回す。
  */
 
@@ -31,7 +31,7 @@ function container(): HTMLElement {
 function setup(options: TextareaOptions = {}) {
   const el = container();
   const value = options.value ?? "あいうえお";
-  // 偽レイアウトは本文から行を割るので、同じものを渡す
+  // フェイクのレイアウトは本文から行を割るので、同じものを渡す
   const fake = fakeBackend(value);
   const textarea = new Textarea(el, { backend: fake.backend, value, ...options });
   cleanups.push(() => textarea.destroy());
@@ -109,7 +109,7 @@ describe("表示に渡すもの", () => {
   });
 });
 
-describe("叩いたら動くか (can)", () => {
+describe("タップしたら動くか (can)", () => {
   it("履歴が空なら戻せない。打てば戻せる", () => {
     const { textarea } = setup();
     expect(textarea.can.undo()).toBe(false);
@@ -172,7 +172,7 @@ describe("キャレットを追う", () => {
   /**
    * 隠し入力を置き直すのがレイアウトより先だと、`caretRect` が動く前の DOM を
    * 測ってしまう。順番そのものは覗けないので、**着いた場所**で縛る。
-   * ここだけは本物のバックエンドが要る (偽物は矩形を動かさない)
+   * ここだけは本物のバックエンドが要る (フェイクは矩形を動かさない)
    */
   it("描き直してから、隠し入力をキャレットの脇へ置く", () => {
     const el = container();
@@ -185,7 +185,7 @@ describe("キャレットを追う", () => {
     textarea.commands.insertText("かきくけこ");
 
     expect(hidden.style.top).not.toBe(before);
-    // 縦書きなので、字送り方向 (top) がいまのキャレットに乗っている
+    // 縦書きなので、インライン方向 (top) がいまのキャレットに乗っている
     expect(Number.parseFloat(hidden.style.top)).toBe(Math.round(textarea.caretRect.y));
   });
 });

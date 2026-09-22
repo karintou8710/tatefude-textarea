@@ -15,7 +15,7 @@ import { applyStyle, canvasStyle } from "./style";
  * 矢印の割り当てだけは Blink 自身が OS で割れている。
  * Linux / Windows は画面の向きのまま (縦書きなら ↓ が次の字、← が次の行) で、
  * これはこちらの割り当てと同じ。macOS だけは矢印が OS のキーバインドから来るので、
- * 縦書きでも ←→ が字送りのままになる。
+ * 縦書きでも ←→ がインライン方向のままになる。
  * そこで cases はネイティブに打つキーで書き、macOS のときだけ軸を入れ替えて打つ。
  */
 
@@ -83,7 +83,7 @@ async function traceNative(value: string, start: number, keys: string[]) {
   return steps;
 }
 
-/** 同じ意味になるキーへ。縦書きでは字送りと行送りの軸が入れ替わる */
+/** 同じ意味になるキーへ。縦書きではインラインとブロックの軸が入れ替わる */
 const ROTATE: Record<string, string> = {
   ArrowRight: "ArrowDown",
   ArrowLeft: "ArrowUp",
@@ -191,6 +191,10 @@ const cases: [name: string, value: string, start: number, keys: string[]][] = [
  * Blink の表 (editing_behavior.cc) で ⌥ + 上下が段落送りになるのは Mac で、
  * Linux / Windows では Ctrl が同じ役をする。⌘ + 矢印に至っては表に無く、
  * Mac では OS のキーバインドから来る。だから本物と突き合わせられるのは Mac だけ。
+ *
+ * **Linux / Windows 側はまだ測っていない。**Ctrl が語と段落を担うところまでは表で分かるが、
+ * 縦書きでその軸がどちらに向くかは実装を見ないと決まらない。ubuntu の CI で
+ * 同じ形の突き合わせを足すのが次。
  */
 const macCases: [name: string, value: string, start: number, keys: string[]][] = [
   ["段落の頭へ", PARAGRAPHS, 12, Array(3).fill("{Alt>}{ArrowUp}{/Alt}")],

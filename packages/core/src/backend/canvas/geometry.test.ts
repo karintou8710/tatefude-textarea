@@ -42,11 +42,11 @@ describe("行の座標", () => {
     expect(toPhysical(geometry, 1, 0)).toEqual({ x: 172, y: 10 });
   });
 
-  it("送ったぶんだけ右へずれる", () => {
+  it("スクロールしたぶんだけ右へずれる", () => {
     expect(toPhysical({ ...geometry, scroll: 18 }, 1, 0).x).toBe(190);
   });
 
-  it("行の中の位置は送り方向に進む", () => {
+  it("行の中の位置はインライン方向に進む", () => {
     expect(toPhysical(geometry, 0, 30)).toEqual({ x: 190, y: 40 });
   });
 
@@ -69,7 +69,7 @@ describe("横書き", () => {
     expect(toPhysical(horizontal, 1, 30)).toEqual({ x: 40, y: 28 });
   });
 
-  it("送ると上へずれる", () => {
+  it("スクロールすると上へずれる", () => {
     expect(toPhysical({ ...horizontal, scroll: 18 }, 1, 0).y).toBe(10);
   });
 
@@ -100,7 +100,7 @@ describe("キャレットの位置", () => {
       kinsoku: false,
       writingMode: "horizontal-tb",
     });
-    // 横書きの送りは fakeMeasurer の字幅 (em の半分)。縦棒の長さは字の箱ぶん
+    // 横書きの字の送り量は fakeMeasurer の字幅 (em の半分)。縦棒の長さは字の箱ぶん
     expect(caretGeometry(flat, horizontal, 2)).toEqual({ x: 20, y: 13, width: 0, height: 12 });
   });
 
@@ -127,7 +127,7 @@ describe("座標からキャレットへ", () => {
     expect(offsetFromPoint(layout, geometry, 181, 10 + 25)).toEqual({ offset: 2, line: 0 });
   });
 
-  it("行の外を突いたら行末に寄せる", () => {
+  it("行の外をクリックしたら行末に寄せる", () => {
     expect(offsetFromPoint(layout, geometry, 163, 999)).toEqual({ offset: 10, line: 1 });
   });
 

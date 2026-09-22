@@ -65,7 +65,7 @@ export function useEditor(containerRef: RefObject<HTMLDivElement | null>, props:
 /**
  * 見た目は CSS に置いたので、props が変わらなくてもレイアウトが要ることがある。
  * className を差し替えた、style を変えた、外のスタイルシートが変わった——
- * どれも React からは「再描画した」としか見えない。依存を書かずに毎回叩く。
+ * どれも React からは「再描画した」としか見えない。依存を書かずに毎回呼ぶ。
  */
 export function useRefreshOnRender(editorRef: RefObject<CoreEditor | null>): void {
   useEffect(() => {
