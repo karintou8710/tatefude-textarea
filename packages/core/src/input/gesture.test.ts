@@ -63,11 +63,22 @@ describe("マウス", () => {
     });
   });
 
-  it("300ms 以上あいたら 1 回目に戻る", () => {
+  it("500ms 以上あいたら 1 回目に戻る", () => {
     const mouse = (over = {}) => touch({ touch: false, ...over });
-    const apart = play([mouse(), mouse({ at: 1400 })]);
+    const apart = play([mouse(), mouse({ at: 1600 })]);
     expect(apart.types).not.toContain("selectWord");
     expect(apart.state.drag).toEqual({ extend: true, by: "char" });
+  });
+
+  it("隣の字を続けて押しても語にはならない。指より許すずれが狭い", () => {
+    // 全角 1 字は 16px 前後。指と同じ 24px を許すと、別の字を押しただけで語が選ばれる
+    const mouse = (over = {}) => touch({ touch: false, ...over });
+    const next = play([mouse(), mouse({ at: 1100, y: 116 })]);
+    expect(next.types).not.toContain("selectWord");
+
+    // 同じ場所ならダブルクリックになる
+    const same = play([mouse(), mouse({ at: 1100, y: 102 })]);
+    expect(same.types).toContain("selectWord");
   });
 
   it("shift を押していたら伸ばす", () => {

@@ -20,10 +20,17 @@ export const LONG_PRESS = 500;
 /**
  * 続けて叩いた / 押したと見なす間隔 (ms) と、その間に許すずれ (CSS px)。
  * **マウスの回数も自分で数える**——`PointerEvent.detail` は仕様で常に 0 なので、
- * ブラウザに聞くと 2 回目が永久に来ない
+ * ブラウザに聞くと 2 回目が永久に来ない。
+ *
+ * **指とマウスで別の値を持つ。**指は狙いがずれるので広く取るが、同じ広さを
+ * マウスに当てると、隣の字を続けて押しただけで語が選ばれる (全角 1 字は 16px 前後)。
+ * 間隔は逆にマウスのほうが長い——OS のダブルクリック速度は読めないが、
+ * macOS の既定は約 500ms で、300ms だとゆっくり押す人が語を選べない
  */
 const DOUBLE_TAP = 300;
 const DOUBLE_TAP_SLOP = 24;
+const DOUBLE_CLICK = 500;
+const DOUBLE_CLICK_SLOP = 4;
 
 /** 指やマウスの出来事。DOM の型は持たない */
 export type PointerInput =
@@ -110,7 +117,7 @@ function mouseDown(
   const effects: GestureEffect[] = [{ type: "forgetAnchor" }, { type: "showHandles", show: false }];
 
   // 回数は自分で数える。押した時点で選び、そのまま語・段落ごとにドラッグできる
-  const clicks = state.lastTap && isNearInTime(input, state.lastTap) ? state.taps + 1 : 1;
+  const clicks = state.lastTap && isNearInTime(input, state.lastTap, false) ? state.taps + 1 : 1;
   const lastTap = { at: input.at, x, y };
   const by: Granularity = clicks >= 3 ? "paragraph" : clicks === 2 ? "word" : "char";
 
@@ -152,7 +159,7 @@ function touchDown(
     return { state: { ...forgetTap(state), drag: { extend: true, by: "char" } }, effects };
   }
 
-  const taps = state.lastTap && isNearInTime(input, state.lastTap) ? state.taps + 1 : 1;
+  const taps = state.lastTap && isNearInTime(input, state.lastTap, true) ? state.taps + 1 : 1;
   const lastTap = { at: input.at, x, y };
 
   if (taps >= 2) {
@@ -248,11 +255,14 @@ function forgetTap(state: GestureState): GestureState {
 function isNearInTime(
   input: { at: number; x: number; y: number },
   previous: { at: number; x: number; y: number },
+  touch: boolean,
 ): boolean {
+  const span = touch ? DOUBLE_TAP : DOUBLE_CLICK;
+  const slop = touch ? DOUBLE_TAP_SLOP : DOUBLE_CLICK_SLOP;
   return (
-    input.at - previous.at < DOUBLE_TAP &&
-    Math.abs(input.x - previous.x) <= DOUBLE_TAP_SLOP &&
-    Math.abs(input.y - previous.y) <= DOUBLE_TAP_SLOP
+    input.at - previous.at < span &&
+    Math.abs(input.x - previous.x) <= slop &&
+    Math.abs(input.y - previous.y) <= slop
   );
 }
 
