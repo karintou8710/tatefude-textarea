@@ -8,13 +8,20 @@ import type { Handle } from "../layout";
  * 閾値の判定はここに閉じているので、node のテストで縛れる。
  */
 
+/** 選択を伸ばす粒度。ダブルクリックのあとは語ごと、トリプルなら段落ごと */
+export type Granularity = "char" | "word" | "paragraph";
+
 /** これだけ動いたら、タップしたのではなくスクロール (CSS px) */
 const TAP_SLOP = 8;
 
 /** 置いたままこれだけ待たれたら長押し。iOS の作法に合わせる (ms) */
 export const LONG_PRESS = 500;
 
-/** 続けてタップしたと見なす間隔 (ms) と、その間に許す指のずれ (CSS px) */
+/**
+ * 続けて叩いた / 押したと見なす間隔 (ms) と、その間に許すずれ (CSS px)。
+ * **マウスの回数も自分で数える**——`PointerEvent.detail` は仕様で常に 0 なので、
+ * ブラウザに聞くと 2 回目が永久に来ない
+ */
 const DOUBLE_TAP = 300;
 const DOUBLE_TAP_SLOP = 24;
 
@@ -29,8 +36,6 @@ export type PointerInput =
       at: number;
       touch: boolean;
       shift: boolean;
-      /** マウスで続けて押した回数 */
-      clicks: number;
       /** タップした場所にハンドルがあるか。押す前にレイアウトへ聞いておく */
       handle: Handle | null;
     }
@@ -44,7 +49,7 @@ export interface GestureState {
   /** 指を置いた場所。離すまでは、タップしたのかスクロールなのか決まらない */
   readonly tap: { id: number; x: number; y: number } | null;
   /** ドラッグしている最中。extend なら伸ばす、でなければキャレットを動かす */
-  readonly drag: { extend: boolean } | null;
+  readonly drag: { extend: boolean; by: Granularity } | null;
   /** 直前にタップした場所と時刻 */
   readonly lastTap: { at: number; x: number; y: number } | null;
   /** 続けてタップされた回数 */
@@ -56,7 +61,7 @@ export const newGestureState: GestureState = { tap: null, drag: null, lastTap: n
 /** 決まったこと。順番どおりに実行する */
 export type GestureEffect =
   | { type: "forgetAnchor" }
-  | { type: "placeCaret"; x: number; y: number; extend: boolean }
+  | { type: "placeCaret"; x: number; y: number; extend: boolean; by: Granularity }
   | { type: "selectWord"; x: number; y: number }
   | { type: "selectParagraph"; x: number; y: number }
   | { type: "grabHandle"; handle: Handle }
@@ -104,22 +109,21 @@ function mouseDown(
   // マウスで触り直したら、指のためのハンドルは引っ込める
   const effects: GestureEffect[] = [{ type: "forgetAnchor" }, { type: "showHandles", show: false }];
 
-  let next = state;
-  if (input.clicks >= 3) {
-    effects.push({ type: "selectParagraph", x, y });
-  } else if (input.clicks === 2) {
-    effects.push({ type: "selectWord", x, y });
-  } else {
-    next = { ...state, drag: { extend: true } };
-    // 測る → 置く → focus、の順。focus を先に入れると、その時点の
-    // 古いキャレットを見せるためにスクロールが動き、クリックした場所が画面ごとずれる
-    effects.push(
-      { type: "capture", id: input.id },
-      { type: "placeCaret", x, y, extend: input.shift },
-    );
-  }
+  // 回数は自分で数える。押した時点で選び、そのまま語・段落ごとにドラッグできる
+  const clicks = state.lastTap && isNearInTime(input, state.lastTap) ? state.taps + 1 : 1;
+  const lastTap = { at: input.at, x, y };
+  const by: Granularity = clicks >= 3 ? "paragraph" : clicks === 2 ? "word" : "char";
+
+  if (by === "paragraph") effects.push({ type: "selectParagraph", x, y });
+  else if (by === "word") effects.push({ type: "selectWord", x, y });
+
+  // 測る → 置く → focus、の順。focus を先に入れると、その時点の
+  // 古いキャレットを見せるためにスクロールが動き、クリックした場所が画面ごとずれる
+  effects.push({ type: "capture", id: input.id });
+  if (by === "char") effects.push({ type: "placeCaret", x, y, extend: input.shift, by });
   effects.push({ type: "focus" });
-  return { state: next, effects };
+
+  return { state: { tap: null, lastTap, taps: clicks, drag: { extend: true, by } }, effects };
 }
 
 /**
@@ -145,7 +149,7 @@ function touchDown(
       { type: "grabHandle", handle: input.handle },
       { type: "capture", id },
     );
-    return { state: { ...forgetTap(state), drag: { extend: true } }, effects };
+    return { state: { ...forgetTap(state), drag: { extend: true, by: "char" } }, effects };
   }
 
   const taps = state.lastTap && isNearInTime(input, state.lastTap) ? state.taps + 1 : 1;
@@ -160,7 +164,15 @@ function touchDown(
       { type: "focus" },
       { type: "capture", id },
     );
-    return { state: { tap: null, lastTap, taps, drag: { extend: true } }, effects };
+    return {
+      state: {
+        tap: null,
+        lastTap,
+        taps,
+        drag: { extend: true, by: taps >= 3 ? "paragraph" : "word" },
+      },
+      effects,
+    };
   }
 
   // ここで focus を入れると、スワイプしただけでキーボードが出てくる。離すまで待つ
@@ -178,7 +190,9 @@ function move(state: GestureState, input: Extract<PointerInput, { type: "move" }
   // 掴んだ側は置いたまま伸ばす。長押しからのときは、キャレットごと動かす
   return {
     state,
-    effects: [{ type: "placeCaret", x: input.x, y: input.y, extend: state.drag.extend }],
+    effects: [
+      { type: "placeCaret", x: input.x, y: input.y, extend: state.drag.extend, by: state.drag.by },
+    ],
   };
 }
 
@@ -190,7 +204,7 @@ function up(state: GestureState, input: Extract<PointerInput, { type: "up" }>): 
     // 置いた場所から動かずに離した = タップした。ここで初めて focus を入れる。
     // focus より先に置く。あとで入れると、古いキャレットを見せるスクロールに持っていかれる
     effects.push(
-      { type: "placeCaret", x: input.x, y: input.y, extend: input.shift },
+      { type: "placeCaret", x: input.x, y: input.y, extend: input.shift, by: "char" },
       { type: "showHandles", show: true },
       { type: "focus" },
     );
@@ -210,9 +224,9 @@ function longPress(
   if (state.tap?.id !== input.id) return { state, effects: [] };
   // 掴んだ扱いにする。離しても置き直しはしない
   return {
-    state: { tap: null, lastTap: null, taps: 0, drag: { extend: false } },
+    state: { tap: null, lastTap: null, taps: 0, drag: { extend: false, by: "char" } },
     effects: [
-      { type: "placeCaret", x: input.x, y: input.y, extend: false },
+      { type: "placeCaret", x: input.x, y: input.y, extend: false, by: "char" },
       { type: "showHandles", show: true },
       { type: "focus" },
       { type: "capture", id: input.id },

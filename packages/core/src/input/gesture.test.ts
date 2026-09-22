@@ -28,7 +28,6 @@ const touch = (over: Partial<Extract<PointerInput, { type: "down" }>> = {}) =>
     at: 1000,
     touch: true,
     shift: false,
-    clicks: 1,
     handle: null,
     ...over,
   }) satisfies PointerInput;
@@ -37,7 +36,7 @@ describe("マウス", () => {
   it("押したら掴んで、キャレットを置く。focus は最後", () => {
     const { state, types } = play([touch({ touch: false })]);
     expect(types).toEqual(["forgetAnchor", "showHandles", "capture", "placeCaret", "focus"]);
-    expect(state.drag).toEqual({ extend: true });
+    expect(state.drag).toEqual({ extend: true, by: "char" });
   });
 
   it("触り直したら指のハンドルは引っ込める", () => {
@@ -45,15 +44,41 @@ describe("マウス", () => {
     expect(effects[1]).toEqual({ type: "showHandles", show: false });
   });
 
-  it("2 回で語、3 回で段落。どちらもドラッグに繋がらない", () => {
-    expect(play([touch({ touch: false, clicks: 2 })]).types).toContain("selectWord");
-    expect(play([touch({ touch: false, clicks: 3 })]).types).toContain("selectParagraph");
-    expect(play([touch({ touch: false, clicks: 2 })]).state.drag).toBe(null);
+  it("回数は自分で数える。PointerEvent.detail は常に 0 なので当てにできない", () => {
+    const mouse = (over = {}) => touch({ touch: false, ...over });
+    const twice = play([mouse(), mouse({ at: 1100 })]);
+    expect(twice.types).toContain("selectWord");
+    expect(twice.state.taps).toBe(2);
+
+    const thrice = play([mouse(), mouse({ at: 1100 }), mouse({ at: 1200 })]);
+    expect(thrice.types).toContain("selectParagraph");
+  });
+
+  it("2 回目・3 回目のあとは、そのまま語・段落ごとにドラッグできる", () => {
+    const mouse = (over = {}) => touch({ touch: false, ...over });
+    expect(play([mouse(), mouse({ at: 1100 })]).state.drag).toEqual({ extend: true, by: "word" });
+    expect(play([mouse(), mouse({ at: 1100 }), mouse({ at: 1200 })]).state.drag).toEqual({
+      extend: true,
+      by: "paragraph",
+    });
+  });
+
+  it("300ms 以上あいたら 1 回目に戻る", () => {
+    const mouse = (over = {}) => touch({ touch: false, ...over });
+    const apart = play([mouse(), mouse({ at: 1400 })]);
+    expect(apart.types).not.toContain("selectWord");
+    expect(apart.state.drag).toEqual({ extend: true, by: "char" });
   });
 
   it("shift を押していたら伸ばす", () => {
     const { effects } = play([touch({ touch: false, shift: true })]);
-    expect(effects).toContainEqual({ type: "placeCaret", x: 100, y: 100, extend: true });
+    expect(effects).toContainEqual({
+      type: "placeCaret",
+      x: 100,
+      y: 100,
+      extend: true,
+      by: "char",
+    });
   });
 });
 
@@ -110,7 +135,7 @@ describe("指: 連続タップ", () => {
       second(),
     ]);
     expect(types).toContain("selectWord");
-    expect(state.drag).toEqual({ extend: true });
+    expect(state.drag).toEqual({ extend: true, by: "word" });
     expect(state.taps).toBe(2);
   });
 
@@ -159,7 +184,7 @@ describe("指: 長押し", () => {
   it("時間が来たら掴む。離しても置き直さない", () => {
     const { state, types } = play([touch(), { type: "longPress", id: 1, x: 100, y: 100 }]);
     expect(types.slice(-4)).toEqual(["placeCaret", "showHandles", "focus", "capture"]);
-    expect(state.drag).toEqual({ extend: false });
+    expect(state.drag).toEqual({ extend: false, by: "char" });
     expect(state.tap).toBe(null);
   });
 
@@ -169,7 +194,13 @@ describe("指: 長押し", () => {
       { type: "longPress", id: 1, x: 100, y: 100 },
       { type: "move", id: 1, x: 140, y: 100 },
     ]);
-    expect(effects).toContainEqual({ type: "placeCaret", x: 140, y: 100, extend: false });
+    expect(effects).toContainEqual({
+      type: "placeCaret",
+      x: 140,
+      y: 100,
+      extend: false,
+      by: "char",
+    });
   });
 
   it("指を離したあとに時間が来ても何もしない", () => {
@@ -186,13 +217,19 @@ describe("指: ハンドル", () => {
   it("押した時点で掴む。タップした扱いにはしない", () => {
     const { state, types } = play([touch({ handle: "start" })]);
     expect(types).toEqual(["forgetAnchor", "cancelLongPress", "grabHandle", "capture"]);
-    expect(state.drag).toEqual({ extend: true });
+    expect(state.drag).toEqual({ extend: true, by: "char" });
     expect(state.tap).toBe(null);
   });
 
   it("掴んだあとは端を伸ばすだけ", () => {
     const { effects } = play([touch({ handle: "end" }), { type: "move", id: 1, x: 160, y: 100 }]);
-    expect(effects).toContainEqual({ type: "placeCaret", x: 160, y: 100, extend: true });
+    expect(effects).toContainEqual({
+      type: "placeCaret",
+      x: 160,
+      y: 100,
+      extend: true,
+      by: "char",
+    });
   });
 });
 

@@ -1,3 +1,4 @@
+import { userEvent } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CanvasStyleOptions } from "../src/backend/canvas/style";
 import { CanvasTextarea } from "../src/canvas";
@@ -900,6 +901,32 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       const size = vertical ? container.clientWidth : container.clientHeight;
       const edge = 10 + 36 / 2;
       expect(Math.min(Math.abs(center - edge), Math.abs(size - edge - center))).toBeLessThan(1);
+    });
+  });
+
+  describe("マウス", () => {
+    // **本物の入力で打つ。**自作した PointerEvent では detail のようにブラウザが
+    // 作る値を持てないので、回数の配線はこれでしか踏めない
+    it("ダブルクリックで語、トリプルクリックで段落を選ぶ", async () => {
+      const { container, editor } = setup({ value: "吾輩は猫である。\n名前はまだ無い。" });
+      const surface = container.firstElementChild as HTMLElement;
+
+      await userEvent.dblClick(surface);
+      const word = editor.state.selection;
+      expect(Math.abs(word.head - word.anchor)).toBeGreaterThan(0);
+
+      await userEvent.tripleClick(surface);
+      const paragraph = editor.state.selection;
+      expect(Math.abs(paragraph.head - paragraph.anchor)).toBeGreaterThan(
+        Math.abs(word.head - word.anchor),
+      );
+    });
+
+    it("1 回のクリックはキャレットを置くだけ", async () => {
+      const { container, editor } = setup({ value: "吾輩は猫である。" });
+      const surface = container.firstElementChild as HTMLElement;
+      await userEvent.click(surface);
+      expect(editor.state.selection.anchor).toBe(editor.state.selection.head);
     });
   });
 

@@ -12,7 +12,10 @@ export function wordRangeAt(text: string, offset: number): [number, number] {
 }
 
 export function paragraphRangeAt(text: string, offset: number): [number, number] {
-  const from = text.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
-  const found = text.indexOf("\n", offset);
+  // offset が改行そのものを指していることがある (空行をクリックしたとき)。
+  // 手前から探すと前の段落を拾って from > to になるので、改行の位置で切る
+  const at = text[offset] === "\n" ? offset : Math.max(0, offset - 1);
+  const from = text.lastIndexOf("\n", at) + 1;
+  const found = text.indexOf("\n", from);
   return [from, found === -1 ? text.length : found];
 }

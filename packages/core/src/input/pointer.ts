@@ -4,6 +4,7 @@ import {
   cancelDrag,
   type GestureEffect,
   type GestureState,
+  type Granularity,
   LONG_PRESS,
   newGestureState,
   onPointer,
@@ -14,7 +15,8 @@ import type { Pointer } from "./receivers";
 /** ジェスチャが決まったときに呼ぶ先。選択の作り方は Textarea 側が持つ */
 export interface PointerActions {
   disabled(): boolean;
-  placeCaret(caret: Caret, extend: boolean): void;
+  /** `by` が char でなければ、語・段落の端まで揃えて伸ばす */
+  placeCaret(caret: Caret, extend: boolean, by: Granularity): void;
   selectWord(offset: number): void;
   selectParagraph(offset: number): void;
   /** 選択の端にハンドルを出すか */
@@ -98,7 +100,6 @@ export class PointerGestures implements Pointer {
         at: event.timeStamp,
         touch,
         shift: event.shiftKey,
-        clicks: event.detail,
         // ハンドルは指のときだけ出す
         handle: touch ? this.hits.hitHandle(event.clientX, event.clientY) : null,
       });
@@ -134,7 +135,7 @@ export class PointerGestures implements Pointer {
         this.scroller.forgetAnchor();
         break;
       case "placeCaret":
-        this.actions.placeCaret(this.hits.hitTest(effect.x, effect.y), effect.extend);
+        this.actions.placeCaret(this.hits.hitTest(effect.x, effect.y), effect.extend, effect.by);
         break;
       case "selectWord":
         this.actions.selectWord(this.hits.hitTest(effect.x, effect.y).offset);

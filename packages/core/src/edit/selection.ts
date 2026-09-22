@@ -55,6 +55,17 @@ export function selectParagraph(state: EditState, offset: number): Result {
 }
 
 /**
+ * 語・段落の端まで揃えて伸ばす。ダブル / トリプルクリックからのドラッグが通る。
+ * 掴んだ側 (anchor) は動かさず、動く側だけを端へ寄せる
+ */
+export function extendTo(state: EditState, offset: number, by: "word" | "paragraph"): Result {
+  const [from, to] =
+    by === "word" ? wordRangeAt(state.text, offset) : paragraphRangeAt(state.text, offset);
+  const forward = offset >= state.anchor;
+  return moveCaret(state, { offset: forward ? to : from, preferEnd: forward }, true);
+}
+
+/**
  * ハンドルを掴んだ。動かす側を head に、反対の端を anchor に置き直す。
  * あとは伸ばすだけになるので、掴んだあとの扱いはドラッグと同じ
  */

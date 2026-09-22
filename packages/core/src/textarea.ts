@@ -4,6 +4,7 @@ import { type Command, runCommand } from "./edit/command";
 import { beginComposition, endComposition, updateComposition } from "./edit/compose";
 import {
   breakCoalescing,
+  extendTo,
   grabHandle,
   moveCaret,
   selectAll,
@@ -272,7 +273,12 @@ export class Textarea {
   private pointerActions(): PointerActions {
     return {
       disabled: () => this.options.disabled,
-      placeCaret: (caret, extend) => this.apply(moveCaret(this.editState, caret, extend)),
+      placeCaret: (caret, extend, by) =>
+        this.apply(
+          by === "char"
+            ? moveCaret(this.editState, caret, extend)
+            : extendTo(this.editState, caret.offset, by),
+        ),
       selectWord: (offset) => this.apply(selectWord(this.editState, offset)),
       selectParagraph: (offset) => this.apply(selectParagraph(this.editState, offset)),
       grabHandle: (edge) => this.apply(grabHandle(this.editState, edge)),
