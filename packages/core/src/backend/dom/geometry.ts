@@ -238,17 +238,30 @@ export function pitchOf(vertical: boolean, rects: readonly Rect[], fallback: num
   // 行が 2 本見つかれば足りる
   if (rects.length < 2) return fallback;
 
-  // 同じ行に複数の断片が出ることがある。1/4px に丸めて行の位置だけを拾う
-  const blocks = rects.map((rect) =>
-    Math.round((vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2) * 4),
-  );
-  const sorted = [...new Set(blocks)].sort((a, b) => a - b);
+  // **端数を落とさない。**16px × 1.8 = 28.8 のように 1/4px に乗らない値が普通にあり、
+  // 丸めると 1 行あたり 0.05px の系統誤差になる。列は「行番号 × 行送り」で置くので、
+  // 行が進むほど横へずれていく (100 行で字の 3 分の 1)
+  const centers = rects
+    .map((rect) => (vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2))
+    .sort((a, b) => a - b);
 
-  // 空行は行 2 つぶんの隙間を作る。いちばん狭い隙間が行送り
-  let pitch = Number.POSITIVE_INFINITY;
-  for (let i = 1; i < sorted.length; i++) {
-    const gap = (sorted[i] - sorted[i - 1]) / 4;
-    if (gap > 1 && gap < pitch) pitch = gap;
+  // 同じ行に複数の断片が出ることがある。1px 以内は同じ行とみなす
+  const lines: number[] = [];
+  for (const center of centers) {
+    if (lines.length === 0 || center - lines[lines.length - 1] > 1) lines.push(center);
   }
-  return Number.isFinite(pitch) ? pitch : fallback;
+  if (lines.length < 2) return fallback;
+
+  // 空行は行 2 つぶんの隙間を作る。いちばん狭い隙間が行 1 つぶん
+  let unit = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < lines.length; i++) {
+    const gap = lines[i] - lines[i - 1];
+    if (gap > 1 && gap < unit) unit = gap;
+  }
+  if (!Number.isFinite(unit)) return fallback;
+
+  // 端から端までを行数で割り直す。1 本ぶんの測り誤差を均す
+  const span = lines[lines.length - 1] - lines[0];
+  const count = Math.round(span / unit);
+  return count > 0 ? span / count : unit;
 }

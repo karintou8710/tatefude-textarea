@@ -213,8 +213,20 @@ describe("pitchOf", () => {
     expect(geometry.pitchOf(true, [at(100), at(70), at(10)], 99)).toBe(30);
   });
 
-  it("同じ行に出た断片は数えない。1/4px に丸めて隙間で弾く", () => {
+  it("同じ行に出た断片は数えない。1px 以内は同じ行とみなす", () => {
     expect(geometry.pitchOf(true, [at(100), at(100.2), at(70)], 99)).toBe(30);
+  });
+
+  it("端数を落とさない。丸めると行が進むほど列がずれる", () => {
+    // 16px × 1.8 = 28.8。1/4px に丸めると 28.75 になり、1 行あたり 0.05px の誤差が出る
+    const centers = [0, 1, 2, 3, 4, 5].map((i) => at(300 - i * 28.8));
+    expect(geometry.pitchOf(true, centers, 99)).toBeCloseTo(28.8, 6);
+  });
+
+  it("1 本ぶんの測り誤差は端から端までで均す", () => {
+    // 途中が 0.1px ずれていても、全体を行数で割り直すので寄らない
+    const centers = [at(300), at(271.2), at(242.3), at(213.6), at(184.8)];
+    expect(geometry.pitchOf(true, centers, 99)).toBeCloseTo(28.8, 2);
   });
 
   it("行が 1 本しか見つからなければ代用の値を返す", () => {

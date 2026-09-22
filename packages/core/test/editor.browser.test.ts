@@ -723,8 +723,15 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
 
       editor.commands.setSelection(from);
       await nextFrames();
+      // 座標は実測から出るので端数を持つ。1px 未満は見ない
+      const near = (got: { x: number; y: number }, want: { x: number; y: number }) => {
+        expect(got.x).toBeCloseTo(want.x, 1);
+        expect(got.y).toBeCloseTo(want.y, 1);
+      };
+
       const startBar = editor.caretRect;
-      expect(startDot).toEqual(
+      near(
+        startDot,
         vertical
           ? { x: startBar.x + startBar.width + radius, y: startBar.y }
           : { x: startBar.x, y: startBar.y - radius },
@@ -733,7 +740,8 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       editor.commands.setSelection(to);
       await nextFrames();
       const endBar = editor.caretRect;
-      expect(endDot).toEqual(
+      near(
+        endDot,
         vertical
           ? { x: endBar.x - radius, y: endBar.y }
           : { x: endBar.x, y: endBar.y + endBar.height + radius },
