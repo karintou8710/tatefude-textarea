@@ -6,7 +6,7 @@ export const fonts = [
   { label: "ゴシック", value: '"Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif' },
 ];
 
-/** つまみで動かせるもの。writingMode 以外はすべて CSS に落ちる */
+/** ハンドルで動かせるもの。writingMode 以外はすべて CSS に落ちる */
 export interface Settings {
   size: number;
   lineHeight: number;
@@ -25,7 +25,7 @@ export const defaultSettings: Settings = {
 
 /**
  * 寸法とレイアウトはエディタがコンテナの計算スタイルから読む。
- * つまみで動かすので、クラスではなく直接当てる。
+ * ハンドルで動かすので、クラスではなく直接当てる。
  */
 export function editorStyle({ family, size, lineHeight, kinsoku }: Settings): CSSProperties {
   return {

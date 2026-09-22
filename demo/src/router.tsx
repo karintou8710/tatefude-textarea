@@ -32,7 +32,7 @@ const sampleRoute = createRoute({
   component: () => <EditorPage initialText={sampleText} />,
 });
 
-// GitHub Pages はリポジトリ名の下に置かれ、深い URL を直接叩くと 404 が返る。
+// GitHub Pages はリポジトリ名の下に置かれ、深い URL を直接タップすると 404 が返る。
 // ハッシュで持てば base: "./" のまま、どこに置いても動く
 export const router = createRouter({
   routeTree: rootRoute.addChildren([homeRoute, emptyRoute, sampleRoute]),

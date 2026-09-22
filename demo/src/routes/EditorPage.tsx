@@ -5,6 +5,7 @@ import { EditorPane } from "../components/EditorPane";
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { SelectionToolbar } from "../components/SelectionToolbar";
+import { useCoarsePointer } from "../hooks/usePointer";
 import { useSoftKeyboard } from "../hooks/useSoftKeyboard";
 import { useViewportHeight } from "../hooks/useViewportHeight";
 import { useSettings } from "../settings-store";
@@ -22,6 +23,8 @@ export function EditorPage({ initialText }: Props) {
   useViewportHeight();
   // キーボードが出ると縦書きの行はそのぶん短くなる。ヘッダーのぶんまで削らない
   const keyboardOpen = useSoftKeyboard();
+  // PC はキーボードで切り貼りできるので、編集メニューは指のときだけ
+  const coarsePointer = useCoarsePointer();
 
   return (
     <div className={styles.page}>
@@ -34,11 +37,13 @@ export function EditorPage({ initialText }: Props) {
         onChange={setValue}
         onSelectionChange={setSelection}
       />
-      <SelectionToolbar
-        editor={editorRef.current}
-        writingMode={settings.writingMode}
-        selection={selection}
-      />
+      {coarsePointer && (
+        <SelectionToolbar
+          editor={editorRef.current}
+          writingMode={settings.writingMode}
+          selection={selection}
+        />
+      )}
       <Footer count={value.length} writingMode={settings.writingMode} />
     </div>
   );
