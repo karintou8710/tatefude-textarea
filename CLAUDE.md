@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   「編集操作への指示」を作る側だから。
 - `packages/core/src/state` … ③ 状態と、そこから引き出すもの。
   編集の状態 (`edit.ts`)、画面の状態 (`screen.ts`)、戻せる場所 (`history.ts`)、
-  変換中の字 (`composition.ts`)、引き出すもの (`query.ts`)。
+  変換中の範囲 (`composition.ts`)、引き出すもの (`query.ts`)。
   `interface` と関数だけで、クラスは持たない。
 - `packages/core/src/backend` … ④ レイアウトと描画。`view-state.ts` が状態と描画の継ぎ目で、
   `blink.ts` が点滅を持ち、`container.ts` がコンテナに当てる。`backend.ts` が実装の境界。
@@ -220,7 +220,7 @@ Linux / Windows の `<textarea>` と同じで、macOS の `<textarea>` とだけ
 | クリック / タップ | マウスで押す / 指で触る。動きは別なので語も分ける |
 | 隠し入力 | 画面に出さない `<textarea>`。入力・IME・クリップボードを受ける |
 | focus | DOM の focus (`document.activeElement`)。カタカナでは書かない |
-| state | 編集の状態 (`EditState`)。本文・選択・履歴・変換中の字。作り直すもので、書き換えない |
+| state | 編集の状態 (`EditState`)。本文・選択・履歴・変換中の範囲。作り直すもので、書き換えない |
 | commands | 外から輪に入る口 (`textarea.commands`)。`edit/` の操作を `apply` に結び付けたもので、操作そのものではない。キー割り当てが作る内側の `Command` とも別物 |
 
 ## テスト

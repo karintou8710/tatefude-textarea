@@ -17,7 +17,7 @@ export function buildViewState(
 ): ViewState {
   return {
     text: content.text,
-    // 変換中は選択を出さない。預かった文字列が選択の中に入るわけではない
+    // 変換中は選択を出さない。変換中の字が選択されているわけではない
     selection: content.composing ? { start: 0, end: 0 } : content.selection,
     caret: content.caret,
     // 選択が伸びている間は出さない。textarea もそうなっている。

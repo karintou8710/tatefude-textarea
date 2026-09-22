@@ -17,12 +17,19 @@ export function insert(state: EditState, raw: string, limits: Limits): Result {
   return replace(state, from, to, text, "input", limits);
 }
 
-/** 決まった位置へ差し込む。変換の確定だけが通る。選択は見ない */
-export function insertAt(state: EditState, at: number, raw: string, limits: Limits): Result {
+/**
+ * 決まった範囲を差し替える。**変換の更新と確定だけが通る。**選択は見ない。
+ * 入った先は返ってきた state の head から読む (maxLength で切られることがある)
+ */
+export function replaceAt(
+  state: EditState,
+  from: number,
+  to: number,
+  raw: string,
+  limits: Limits,
+): Result {
   if (!limits.editable) return unchanged(state);
-  const text = normalize(raw);
-  if (!text) return unchanged(state);
-  return replace(state, at, at, text, "other", limits);
+  return replace(state, from, to, normalize(raw), "input", limits);
 }
 
 /** 選択を消す。切り取りと、変換を始めるときが通る */
@@ -95,7 +102,7 @@ export function reset(
       text,
       ...place(text, next ?? selection(state)),
       history: keepHistory ? state.history : history.emptyHistory,
-      // 預かっていた変換中の字は、差し込む先を失った
+      // 変換中だったなら、その範囲はもう無い
       composition: null,
     },
     changed: "edit",

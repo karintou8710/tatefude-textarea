@@ -20,7 +20,7 @@ export interface EditState {
   /** 行を跨ぐときに保つ、元いたインライン方向の位置 */
   readonly goal: Goal;
   readonly history: HistoryState;
-  /** 預かっている変換中の字。変換していなければ null */
+  /** 変換中の字が本文のどこに入っているか。変換していなければ null */
   readonly composition: CompositionState | null;
 }
 

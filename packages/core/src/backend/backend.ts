@@ -1,5 +1,5 @@
 import type { Hits, Lines, Measures, Scroller } from "../layout";
-import type { CompositionRange } from "../state/composition";
+import type { CompositionState } from "../state/composition";
 import type { Caret } from "../text/caret";
 import type { ResolvedOptions } from "../types";
 
@@ -13,7 +13,7 @@ export interface ViewState {
   focused: boolean;
   /** 選択の両端にハンドルを出すか。指で触ったときだけ出す */
   handles: boolean;
-  composition: CompositionRange | null;
+  composition: CompositionState | null;
   /** 本文が空のときだけ入る */
   placeholder: string | null;
 }
@@ -55,4 +55,4 @@ export interface Backend extends Lines, Hits, Measures, Scroller, Painter {
 }
 
 export type { CaretRect, Handle, Hits, Lines, Measures, Scroller } from "../layout";
-export type { CompositionRange } from "../state/composition";
+export type { CompositionState } from "../state/composition";

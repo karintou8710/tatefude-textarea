@@ -1,6 +1,6 @@
 import type { Caret } from "../../text/caret";
 import type { ResolvedOptions } from "../../types";
-import type { CompositionRange } from "../backend";
+import type { CompositionState } from "../backend";
 import { isSmallKana } from "./char-class";
 import type { Geometry, Rect } from "./geometry";
 import { caretGeometry, isVertical, selectionRects, toPhysical } from "./geometry";
@@ -17,7 +17,7 @@ export interface RenderState {
   selection: { start: number; end: number };
   caret: Caret | null;
   focused: boolean;
-  composition: CompositionRange | null;
+  composition: CompositionState | null;
   /** 本文が空のときに薄く出す。無ければ null */
   placeholder: Layout | null;
 }

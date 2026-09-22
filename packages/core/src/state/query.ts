@@ -1,6 +1,6 @@
 import type { Caret } from "../text/caret";
 import type { Selection } from "../types";
-import type { CompositionRange } from "./composition";
+import type { CompositionState } from "./composition";
 import * as composition from "./composition";
 import type { EditState } from "./edit";
 import type { Snapshot } from "./history";
@@ -10,16 +10,16 @@ import type { Snapshot } from "./history";
  * レイアウトも色も点滅も知らない。描き方は backend の仕事
  */
 export interface ViewContent {
-  /** 変換中の字を差し込んだ表示用テキスト */
+  /** 本文。変換中の字も入っている */
   readonly text: string;
   /** 確定済みテキストの上での選択範囲 */
   readonly selection: { readonly start: number; readonly end: number };
-  /** 変換中の字を含めたキャレット */
+  /** キャレット */
   readonly caret: Caret;
   /** 選択が潰れているか */
   readonly collapsed: boolean;
   readonly composing: boolean;
-  readonly composition: CompositionRange | null;
+  readonly composition: CompositionState | null;
   readonly empty: boolean;
 }
 
@@ -45,18 +45,13 @@ export function composing(state: EditState): boolean {
   return state.composition !== null;
 }
 
-/** 描画・当たり判定で使う、変換中の字を含めたキャレット */
-export function displayCaret(state: EditState): Caret {
-  return composition.caretOver(state.composition, state.head);
-}
-
 /** 画面に出すべき中身。レイアウトも色も点滅も知らない */
 export function viewContent(state: EditState): ViewContent {
   const [start, end] = range(state);
   return {
-    text: composition.textOver(state.composition, state.text),
+    text: state.text,
     selection: { start, end },
-    caret: displayCaret(state),
+    caret: state.head,
     collapsed: state.anchor === state.head.offset,
     composing: composing(state),
     composition: composition.rangeOf(state.composition),

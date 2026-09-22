@@ -16,14 +16,7 @@ import { HiddenInput, type HiddenInputHandlers } from "./input/hidden-input";
 import { type PointerActions, PointerGestures } from "./input/pointer";
 import type { Input, Pointer } from "./input/receivers";
 import { type EditState, type Limits, newEditState, type Result } from "./state/edit";
-import {
-  composing,
-  displayCaret,
-  range,
-  selectedText,
-  selection,
-  viewContent,
-} from "./state/query";
+import { composing, range, selectedText, selection, viewContent } from "./state/query";
 import { newScreenState, type ScreenState, setFocused, showHandles } from "./state/screen";
 import {
   type Callbacks,
@@ -183,7 +176,7 @@ export class Textarea {
 
   /** キャレットの居場所。container が原点 */
   get caretRect(): CaretRect {
-    return this.backend.caretRect(displayCaret(this.editState));
+    return this.backend.caretRect(this.editState.head);
   }
 
   /**
@@ -260,11 +253,11 @@ export class Textarea {
       insert: (text) => this.handleInsert(text),
       compositionStart: () => this.apply(beginComposition(this.editState, this.limits())),
       compositionUpdate: (text, from, to) =>
-        this.apply(updateComposition(this.editState, text, from, to)),
+        this.apply(updateComposition(this.editState, text, from, to, this.limits())),
       compositionEnd: (text) => this.apply(endComposition(this.editState, text, this.limits())),
       keyDown: (command) => this.handleKeyDown(command),
       caretAnchor: () => ({
-        rect: this.backend.caretRect(displayCaret(this.editState)),
+        rect: this.backend.caretRect(this.editState.head),
         size: this.backend.fontSize,
       }),
       copy: () => selectedText(this.editState),

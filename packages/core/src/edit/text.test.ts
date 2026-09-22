@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { type EditState, type Limits, newEditState } from "../state/edit";
 import { selection } from "../state/query";
 import { breakCoalescing, setSelection } from "./selection";
-import { cut, deleteBy, deleteSelection, insert, insertAt, redo, reset, undo } from "./text";
+import { cut, deleteBy, deleteSelection, insert, redo, replaceAt, reset, undo } from "./text";
 
 const open: Limits = { editable: true, maxLength: Number.POSITIVE_INFINITY };
 const locked: Limits = { editable: false, maxLength: Number.POSITIVE_INFINITY };
@@ -68,15 +68,15 @@ describe("差し込む", () => {
     expect(result.state.text).toBe("あXYZお");
   });
 
-  it("確定は選択ではなく、預かった位置へ入れる", () => {
-    const result = insertAt(at("あいうえお", 3, 5), 1, "×", open);
-    expect(result.state.text).toBe("あ×いうえお");
+  it("範囲の差し替えは選択を見ない。変換だけが通る", () => {
+    const result = replaceAt(at("あいうえお", 3, 5), 1, 3, "×", open);
+    expect(result.state.text).toBe("あ×えお");
   });
 
   it("打ち込めないなら本文を触らない", () => {
     const before = at("あいうえお", 1, 3);
     expect(insert(before, "×", locked).state).toBe(before);
-    expect(insertAt(before, 1, "×", locked).state).toBe(before);
+    expect(replaceAt(before, 1, 2, "×", locked).state).toBe(before);
     expect(deleteSelection(before, locked).state).toBe(before);
     expect(deleteBy(before, -1, false, locked).state).toBe(before);
   });

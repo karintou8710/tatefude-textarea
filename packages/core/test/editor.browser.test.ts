@@ -234,7 +234,7 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
       expect(editor.state.selection).toEqual({ anchor: 4, head: 4 });
     });
 
-    it("変換中は本文がまだ変わらない", () => {
+    it("変換中の字も本文に入り、composing で見分ける", () => {
       const { editor, textarea } = setup();
       textarea.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
       textarea.value = "にほんご";
@@ -245,7 +245,10 @@ describe.each(backends)("%s", (_name, ctor, mode) => {
           data: "にほんご",
         }),
       );
-      expect(editor.state.value).toBe("");
+      expect(editor.state.value).toBe("にほんご");
+      expect(editor.state.composing).toBe(true);
+      // キャレットは文節の末尾。確定していないことは composing で分かる
+      expect(editor.state.selection).toEqual({ anchor: 4, head: 4 });
     });
 
     it("選択したまま変換を始めると選択が消える", () => {
